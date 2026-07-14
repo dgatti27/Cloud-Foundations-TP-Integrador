@@ -1,0 +1,128 @@
+# ============================================================================
+#  ¿QUÉ ES ESTE ARCHIVO? (GitHub Actions)
+#
+#  Es un "pipeline de integración continua" (CI). GitHub lo ejecuta SOLO, en sus
+#  servidores, cada vez que subís código. Corre validaciones automáticas para
+#  avisarte si algo se rompió, ANTES de mergear. Si un check falla, se ve una
+#  cruz roja en el pull request.
+#
+#  Vocabulario:
+#    workflow = este archivo entero      job = una tarea (corre en su propia máquina)
+#    step     = un paso dentro del job    runner = la máquina virtual que lo corre
+# ============================================================================
+
+name: CI   # nombre que se ve en la pestaña "Actions" de GitHub
+
+# 'on' = cuándo se dispara este workflow.
+on:
+  push:
+    branches: [main, master]   # al subir commits a main/master
+  pull_request:                # y en cada pull request
+  workflow_dispatch:           # y con un botón manual desde la web
+
+# 'jobs' = las tareas. Se corren EN PARALELO por defecto (cada una en su máquina).
+jobs:
+  # -------------------------------------------------------------------------
+  python-etl:
+    name: Python / ETL
+    runs-on: ubuntu-latest     # el runner: una VM Linux que provee GitHub
+    steps:                     # los pasos, en orden
+      - uses: actions/checkout@v4         # 1. baja tu código al runner
+      - uses: actions/setup-python@v5     # 2. instala Python
+        with:
+          python-version: "3.11"
+      - name: Instalar herramientas
+        run: python -m pip install --upgrade pip ruff   # 'run' = comando de shell
+      - name: Instalar dependencias de los ETL
+        run: pip install -r etl/requirements.txt
+      - name: Lint (ruff, solo errores reales)
+        # ruff revisa el código. Con --select limitamos a errores de verdad
+        # (sintaxis, nombres indefinidos), no cuestiones de estilo.
+        run: ruff check --select E9,F63,F7,F82 etl
+      - name: Compilar (py_compile)
+        # Verifica que todos los .py compilen (no tengan errores de sintaxis).
+        # 'git ls-files' lista los archivos versionados que matchean el patrón.
+        run: |
+          python -m py_compile $(git ls-files 'etl/*.py')
+          python -m py_compile $(git ls-files 'iac/local-docker/airflow/dags/*.py')
+      - name: Import + smoke test del paquete etl
+        # Importa el paquete y corre el flujo completo con los stubs, para
+        # verificar que las piezas encajan (no valida datos reales).
+        run: |
+          python -c "from etl.extract import EXTRACTORS; assert set(EXTRACTORS) == {'erp-foxpro','ecommerce-mongo','eventos-mongo','scraping'}, EXTRACTORS; print('etl OK')"
+          python - <<'PY'
+          from etl.extract import EXTRACTORS
+          from etl.transform import normalize_records
+          from etl.load import load_to_cruda, load_to_dw
+          for o, fn in EXTRACTORS.items():
+              load_to_cruda(normalize_records(fn(), o), o)
+          load_to_dw()
+          print("smoke OK")
+          PY
+
+  # -------------------------------------------------------------------------
+  shell:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n (sintaxis)
+        # 'bash -n' lee el script y revisa su sintaxis SIN ejecutarlo.
+        run: |
+          for f in $(git ls-files '*.sh'); do bash -n "$f" && echo "OK $f"; done
+      - name: ShellCheck (solo errores)
+        # ShellCheck es un "linter" de bash: detecta bugs comunes. --severity=error
+        # hace que solo falle ante errores graves, no advertencias de estilo.
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck --severity=error $(git ls-files '*.sh')
+
+  # -------------------------------------------------------------------------
+  terraform:
+    name: Terraform (IaC)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: iac/terraform   # todos los 'run' de este job corren acá
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3  # instala Terraform en el runner
+        with:
+          terraform_version: "1.9.5"
+      - name: Format check
+        # Chequea que el código esté bien formateado. 'continue-on-error' hace
+        # que AVISE pero no rompa el build si el formato no es perfecto.
+        run: terraform fmt -check -recursive -diff
+        continue-on-error: true
+      - name: Init (sin backend)
+        # 'init' descarga los providers. -backend=false: no configura estado
+        # remoto (no hace falta para solo validar).
+        run: terraform init -backend=false
+      - name: Validate
+        # 'validate' revisa que la configuración sea correcta (tipos, referencias).
+        run: terraform validate
+
+  # -------------------------------------------------------------------------
+  compose:
+    name: Docker Compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar compose.yaml
+        # 'config -q' parsea el compose y falla si hay errores. No levanta nada.
+        run: docker compose -f iac/local-docker/compose.yaml config -q && echo "compose OK"
+
+  # -------------------------------------------------------------------------
+  finops:
+    name: FinOps (costos)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validar services.json y correr el estimador
+        # Verifica que el JSON de costos sea válido y corre la calculadora.
+        run: |
+          python -c "import json; json.load(open('finops/services.json')); print('services.json OK')"
+          python finops/pricing.py --services finops/services.json --budget 300

@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+
+# Entornos y secretos
+.env
+*.env
+!.env.example
+
+# Terraform / OpenTofu
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+iac/terraform/dw_api.zip
+
+# Office temporales
+~$*
+*.tmp
+
+# SO
+.DS_Store
