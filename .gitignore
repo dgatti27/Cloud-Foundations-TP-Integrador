@@ -9,13 +9,6 @@ __pycache__/
 *.env
 !.env.example
 
-# Terraform / OpenTofu
-.terraform/
-*.tfstate
-*.tfstate.*
-crash.log
-iac/terraform/dw_api.zip
-
 # Office temporales
 ~$*
 *.tmp
