@@ -198,9 +198,9 @@ La arquitectura usa **8 servicios core**, cada uno con una función concreta: **
 │   ├── arquitectura-to-be.png
 │   └── gantt-migracion.png
 ├── finops/                   # Estimador de costos
-│   └── pricing.py
+│   
 └── iac/                      # Provisioning reproducible
-    └── aws-cli/
+   
 ```
 
-**Entregables del proyecto:** este plan (arquitectura, Gantt, costos y justificaciones), los diagramas as-is/to-be, el estimador de costos (`finops/`) y los scripts de provisioning reproducibles (`iac/aws-cli/`).
+**Entregables del proyecto:** este plan (arquitectura, Gantt, costos y justificaciones), los diagramas as-is/to-be, el estimador de costos (`finops/`) y los scripts de provisioning reproducibles (`iac/`).
