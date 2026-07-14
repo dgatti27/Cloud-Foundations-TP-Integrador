@@ -11,19 +11,23 @@
 - Flujo: origenes -> **ETL grupo 1** -> base BRONCE -> **ETL grupo 2** (procesa) -> DW.
 - **Qlik** (BI) lee el DW tambien **por host, sin API**.
 
+![As-is](img/arch_asis.png)
+
 ### Puntos unicos de falla (SPOF)
 
 | SPOF | Riesgo | Mitigacion to-be |
 |---|---|---|
-| Dos servidores sin replica | La caida del server de datos tira base cruda + DW | Separar computo de datos (RDS Multi-AZ) |
-| Base cruda y DW en el mismo host | Ingesta y consultas compiten por CPU/disco | RDS dedicado + staging en S3 |
+| Dos servidores sin replica | La caida del server de datos tira base bronce + DW | Separar computo de datos (RDS Multi-AZ) |
+| Base bronce y DW en el mismo host | Ingesta y consultas compiten por CPU/disco | RDS dedicado + staging en S3 |
 | PostgreSQL single instance | Perdida de datos ante fallo de disco/AZ | RDS Multi-AZ con standby en otra AZ |
 | Sin backups gestionados | Recuperacion manual y lenta | Backups automaticos RDS + snapshots a S3 |
-| Credenciales en el server | Secrets Manager + IAM |
+| Credenciales en el server  | Secrets Manager + IAM |
 | Config manual no versionada | No reproducible | IaC / script AWS CLI + Git |
 | Escala fija del hosting | No absorbe picos de carga ETL/BI | Instancias dimensionadas + margen elastico |
 
 ## Situacion objetivo (to-be)
+
+![To-be](img/arch_tobe.png)
 
 Arquitectura de 3 capas dentro de una **VPC 10.0.0.0/16** en **us-east-1**:
 
@@ -37,7 +41,7 @@ Arquitectura de 3 capas dentro de una **VPC 10.0.0.0/16** en **us-east-1**:
 
 | Local (lab) | Cloud (to-be) |
 |---|---|
-| MiniStack RDS (Postgres real, cruda + DW) | RDS PostgreSQL Multi-AZ (2 bases) |
+| MiniStack RDS (Postgres real, bronce + DW) | RDS PostgreSQL Multi-AZ (2 bases) |
 | Airflow (Docker) | ECS Fargate + EFS (sin EC2) |
 | MinIO | S3 |
 | MiniStack (IAM/RDS/S3/Secrets/ELB) | Servicios AWS reales |
