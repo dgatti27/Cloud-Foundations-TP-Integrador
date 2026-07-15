@@ -7,7 +7,7 @@ from botocore.exceptions import ClientError
 ROOT = Path(__file__).resolve().parents[1]
 
 endpoint = os.getenv("MINIO_ENDPOINT", "http://localhost:9000")
-bucket = os.getenv("MINIO_BUCKET", "curso-data")
+bucket = os.getenv("MINIO_BUCKET", "integrador-data")
 access_key = os.getenv("MINIO_ROOT_USER", "minioadmin")
 secret_key = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
 
@@ -36,6 +36,7 @@ def upload(local_path: Path, s3_key: str) -> None:
 def main() -> None:
     ensure_bucket(bucket)
 
+    """
     files_to_upload = [
         (ROOT / "data" / "raw" / "events.jsonl", "raw/events.jsonl"),
     ]
@@ -51,11 +52,11 @@ def main() -> None:
             upload(local_path, s3_key)
         else:
             print(f"WARN archivo no encontrado, se omite: {local_path}")
-
+    """
     response = s3.list_objects_v2(Bucket=bucket)
     print(f"\nObjetos en s3://{bucket}:")
-    for obj in response.get("Contents", []):
-        print(f"  {obj['Key']} ({obj['Size']} bytes)")
+    #for obj in response.get("Contents", []):
+    #    print(f"  {obj['Key']} ({obj['Size']} bytes)")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,9 @@
 
 Esta carpeta es una introduccion a Infrastructure as Code.
 
+IaC del data lake local: crea buckets en **MinIO** (API S3) via el provider AWS.
+LocalStack S3 queda comentado en `main.tf` (ver `docs/decisions.md` #002).
+
 No provisiona recursos cloud reales. Sirve para practicar:
 
 - estructura de archivos;
@@ -23,7 +26,8 @@ O con OpenTofu:
 
 ```bash
 tofu init
-tofu fmt
-tofu validate
+tofu plan
+tofu apply
+tofu output
 ```
 
