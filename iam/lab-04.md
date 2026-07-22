@@ -104,14 +104,13 @@ dan acceso indefinido.
 ## Paso 6 — Crear rol con trust policy para EC2
 
 ```bash
-awslocal iam create-role \
-  --role-name app-role \
-  --assume-role-policy-document file://iam/trust_policy.json
+awslocal iam create-role --role-name app-role --assume-role-policy-document file://iam/trust_policy_ecs.json
 
-awslocal iam put-role-policy \
-  --role-name app-role \
-  --policy-name InlineS3Read \
-  --policy-document file://iam/s3_read_policy.json
+awslocal iam put-role-policy --role-name app-role --policy-name InlineS3Read --policy-document file://iam/s3_readwrite_policy.json
+
+awslocal iam create-role --role-name app-role --assume-role-policy-document file://iam/trust_policy_rds_export.json
+
+awslocal iam put-role-policy --role-name app-role --policy-name InlineS3Read --policy-document file://iam/s3_readwrite_policy.json
 
 awslocal iam get-role --role-name app-role
 ```
