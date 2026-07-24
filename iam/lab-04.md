@@ -108,9 +108,9 @@ awslocal iam create-role --role-name app-role --assume-role-policy-document file
 
 awslocal iam put-role-policy --role-name app-role --policy-name InlineS3Read --policy-document file://iam/s3_readwrite_policy.json
 
-awslocal iam create-role --role-name app-role --assume-role-policy-document file://iam/trust_policy_rds_export.json
+awslocal iam create-role --role-name db-role --assume-role-policy-document file://iam/trust_policy_rds_export.json
 
-awslocal iam put-role-policy --role-name app-role --policy-name InlineS3Read --policy-document file://iam/s3_readwrite_policy.json
+awslocal iam put-role-policy --role-name db-role --policy-name InlineS3Read --policy-document file://iam/s3_readwrite_policy.json
 
 awslocal iam get-role --role-name app-role
 ```
@@ -124,10 +124,38 @@ puede asumir este rol — no cualquier usuario.
 ## Paso 7 — AssumeRole vía STS → credenciales temporales
 
 ```bash
-awslocal sts assume-role \
-  --role-arn arn:aws:iam::000000000000:role/app-role \
-  --role-session-name lab04-session \
-  --duration-seconds 900
+awslocal sts assume-role --role-arn arn:aws:iam::000000000000:role/app-role --role-session-name TP-App-session --duration-seconds 900
+
+awslocal sts assume-role --role-arn arn:aws:iam::000000000000:role/db-role --role-session-name TP-DB-session --duration-seconds 900
+
+#{
+#    "Credentials": {
+#        "AccessKeyId": "LSIAQAAAAAAAB4LSSV3W",
+#        "SecretAccessKey": "LggpI9Od9Lt7o/rYnFhMLCQvuXXH2gub2I1n2dUA",
+#        "SessionToken": "FQoGZXIvYXdzEBYaD9NmlJOVlVPmFOpAX1uFSFv9g4S2UtIzgEm1gBQ9ux39wOhAD80OXji73MKYE/yGhMXMqhXyUnrJyHV3TX3sS#+YwQ1dXjaBfxBHm+O7v7cLUDmRV0ppM0vp2wubOWQ4+mCQ6bKgoOOrZKe6JlpW6SgbVb3ALwd81iq6W5xhXsdH262tfl/EhOJraC/MZeuf/sK1Sy1vxyOcT93Eoj1e9d216iXVtqYVXiye/INnjAc1kGuCHVoMZ4R4SAR8hQ70kstBcXrFyDvlSNC7NZ1JkuEiJ6iqcVxAKf2ZXqHwWfJWu8eE8gM7mfnbz/SSUVyfUs4h0Kq1Lqm9141w87J0=",
+#        "Expiration": "2026-07-22T21:11:28.471000Z"
+#    },
+#    "AssumedRoleUser": {
+#        "AssumedRoleId": "AROAQAAAAAAADO7SDLRYK:TP-App-session",
+#        "Arn": "arn:aws:sts::000000000000:assumed-role/app-role/TP-App-session"
+#    },
+#    "PackedPolicySize": 6
+#}
+
+#{
+#    "Credentials": {
+#        "AccessKeyId": "LSIAQAAAAAAAE4KCIM2N",
+#        "SecretAccessKey": "7fxl0T86uUe/QIfFiVPIkprIyLYn1v2xAiQ7tFpm",
+#        "SessionToken": "FQoGZXIvYXdzEBYaDmztpJHey2OXPSK4et6BlAooI+v8GMPaifTWCbDxoUpvufVupp34mafR+o+IWl8k3WL0V9a54TkB2qa60/4tRUIZhN6lIy6IaMkGBwNi8K2hT/K1QJrCSNICoinslHV9yCDC8Lrch++EyIWCDVdPauj90gkHk025EDWGYq1mY6vmZCPzD7gl6zBjBPwsS04aIHFASVbr0LcsrWYM/6l3TIj6UZ/DEmJrFZlelQgHb6G7SnXgnFgY3XvfhRFbE3fPa0+ghqipcfBMz2/UQDvSlw+RCqwPSAyoutsAFBWtci4xTjH7qJcxIZEIvzxw8A7Ua6jDftSnPfHkL9OXbI0=",
+#        "Expiration": "2026-07-22T21:11:36.697000Z"
+#    },
+#    "AssumedRoleUser": {
+#        "AssumedRoleId": "AROAQAAAAAAAHH3HCEKNG:TP-DB-session",
+#        "Arn": "arn:aws:sts::000000000000:assumed-role/db-role/TP-DB-session"
+#    },
+#    "PackedPolicySize": 6
+#}
+
 ```
 
 El response tiene tres campos clave:
