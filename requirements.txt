@@ -5,5 +5,7 @@ python-dotenv>=1.0.0
 kafka-python>=2.0.0
 redis>=5.0.0
 awscli
-awscli-local
 localstack-client
+pytest>=8.0.0
+awscli-local>=0.22.0
+pre-commit>=3.5.0

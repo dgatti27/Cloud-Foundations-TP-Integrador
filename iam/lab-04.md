@@ -123,38 +123,16 @@ puede asumir este rol — no cualquier usuario.
 
 ## Paso 7 — AssumeRole vía STS → credenciales temporales
 
+ECS (o un servicio) cuando asume el rol y obtiene credenciales temporales con STS.
+sts assume-role pide a IAM: “quiero actuar como app-role durante 15 min (900 s)”.
+STS responde con un trío temporal: AccessKeyId, SecretAccessKey y SessionToken (+ Expiration).
+Exportás esas variables y con ellas listás S3: ya no usás el usuario permanente, sino la identidad del rol.
+Es el patrón de privilegio mínimo: el rol tiene los permisos S3; quien lo asume recibe claves que caducan, en lugar de access keys fijas de un usuario.
+
 ```bash
 awslocal sts assume-role --role-arn arn:aws:iam::000000000000:role/app-role --role-session-name TP-App-session --duration-seconds 900
 
 awslocal sts assume-role --role-arn arn:aws:iam::000000000000:role/db-role --role-session-name TP-DB-session --duration-seconds 900
-
-#{
-#    "Credentials": {
-#        "AccessKeyId": "LSIAQAAAAAAAB4LSSV3W",
-#        "SecretAccessKey": "LggpI9Od9Lt7o/rYnFhMLCQvuXXH2gub2I1n2dUA",
-#        "SessionToken": "FQoGZXIvYXdzEBYaD9NmlJOVlVPmFOpAX1uFSFv9g4S2UtIzgEm1gBQ9ux39wOhAD80OXji73MKYE/yGhMXMqhXyUnrJyHV3TX3sS#+YwQ1dXjaBfxBHm+O7v7cLUDmRV0ppM0vp2wubOWQ4+mCQ6bKgoOOrZKe6JlpW6SgbVb3ALwd81iq6W5xhXsdH262tfl/EhOJraC/MZeuf/sK1Sy1vxyOcT93Eoj1e9d216iXVtqYVXiye/INnjAc1kGuCHVoMZ4R4SAR8hQ70kstBcXrFyDvlSNC7NZ1JkuEiJ6iqcVxAKf2ZXqHwWfJWu8eE8gM7mfnbz/SSUVyfUs4h0Kq1Lqm9141w87J0=",
-#        "Expiration": "2026-07-22T21:11:28.471000Z"
-#    },
-#    "AssumedRoleUser": {
-#        "AssumedRoleId": "AROAQAAAAAAADO7SDLRYK:TP-App-session",
-#        "Arn": "arn:aws:sts::000000000000:assumed-role/app-role/TP-App-session"
-#    },
-#    "PackedPolicySize": 6
-#}
-
-#{
-#    "Credentials": {
-#        "AccessKeyId": "LSIAQAAAAAAAE4KCIM2N",
-#        "SecretAccessKey": "7fxl0T86uUe/QIfFiVPIkprIyLYn1v2xAiQ7tFpm",
-#        "SessionToken": "FQoGZXIvYXdzEBYaDmztpJHey2OXPSK4et6BlAooI+v8GMPaifTWCbDxoUpvufVupp34mafR+o+IWl8k3WL0V9a54TkB2qa60/4tRUIZhN6lIy6IaMkGBwNi8K2hT/K1QJrCSNICoinslHV9yCDC8Lrch++EyIWCDVdPauj90gkHk025EDWGYq1mY6vmZCPzD7gl6zBjBPwsS04aIHFASVbr0LcsrWYM/6l3TIj6UZ/DEmJrFZlelQgHb6G7SnXgnFgY3XvfhRFbE3fPa0+ghqipcfBMz2/UQDvSlw+RCqwPSAyoutsAFBWtci4xTjH7qJcxIZEIvzxw8A7Ua6jDftSnPfHkL9OXbI0=",
-#        "Expiration": "2026-07-22T21:11:36.697000Z"
-#    },
-#    "AssumedRoleUser": {
-#        "AssumedRoleId": "AROAQAAAAAAAHH3HCEKNG:TP-DB-session",
-#        "Arn": "arn:aws:sts::000000000000:assumed-role/db-role/TP-DB-session"
-#    },
-#    "PackedPolicySize": 6
-#}
 
 ```
 
@@ -167,21 +145,22 @@ El response tiene tres campos clave:
 Usá esas credenciales para acceder a S3:
 
 ```bash
-export AWS_ACCESS_KEY_ID=<AccessKeyId del assume-role>
-export AWS_SECRET_ACCESS_KEY=<SecretAccessKey>
-export AWS_SESSION_TOKEN=<SessionToken>
+export AWS_ACCESS_KEY_ID="LSIAQAAAAAAAGXHRKBIB"
+export AWS_SECRET_ACCESS_KEY="wSHEtFQsgGne4YyhcwqsxMa5FifO4oyL0BKKhUZ9"
+export AWS_SESSION_TOKEN="FQoGZXIvYXdzEBYaD31C47m2ixej8jhUeVkMagm09qzwT21hIZyJEMH9/fGKUaLQsrc9K5uGrwjV+B2/Eq4owkY3BGMiVaZWouUVo+tPiayMIKcGMTXoEHc0khy8kHM4E2POkYjDj69dHek0IHcqU2emQayQ7tfs1hCruXDpMqw6tIhaUHyIxEPt4xfW/WsPZgKermhilojz1jqe6ezwcTylC+v6hl4Ck6MyphdotAjaRH8DHPgl+WTTfEhX5W+Nq/LhVyAqOQs+GHHQBwDeXm1K/Qg5YyT2KK6YcSQP2qNnA69Q1qR9vwXQoHUVwMjRKkSMWw7IZsS179s7h3GvrQ4Ae9xVKlEW7ZA="
 
-awslocal s3 ls s3://course-data-raw --recursive
+awslocal s3 ls s3://backup-data-raw --recursive
+awslocal s3 ls s3://snapshot-data-raw --recursive
 ```
 
 ---
 
 ## Paso 8 — Script automatizado
 
-El script `scripts/iam_demo.py` hace los pasos 2–7 en secuencia:
+El script `iam/iam_demo.py` hace los pasos 2–7 en secuencia:
 
 ```bash
-python scripts/iam_demo.py
+python iam/iam_demo.py
 ```
 
 Sirve como referencia y para reproducir el setup en un entorno limpio.
