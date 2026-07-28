@@ -66,7 +66,7 @@ services:
     image: localstack/localstack:latest
     container_name: localstack-integrador
     environment:
-      SERVICES: s3,sqs,sns,lambda,dynamodb,events,cloudwatch,logs,iam
+      SERVICES: s3,sqs,sns,lambda,dynamodb,events,cloudwatch,logs,iam,ec2,secretsmanager
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
     ports:
       - "4566:4566"
@@ -78,6 +78,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  # RDS con Postgres real + Secrets de la DB. Puerto distinto: no pisa LocalStack S3.
+  ministack-integrador:
+    image: ministackorg/ministack:latest
+    container_name: ministack-integrador
+    ports:
+      - "4567:4566"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
 volumes:
   postgres-data-bronce:

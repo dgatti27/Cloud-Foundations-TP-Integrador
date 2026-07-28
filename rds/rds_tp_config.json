@@ -1,0 +1,66 @@
+{
+  "db_instance": {
+    "Identifier": "tp-dw-db",
+    "Engine": "postgres",
+    "EngineVersion": "16.3",
+    "InstanceClass": "db.t3.medium",
+    "AllocatedStorage": 50,
+    "MasterUsername": "dwadmin",
+    "DBName": "dw",
+    "Port": 5432,
+    "BackupRetentionPeriod": 7,
+    "MultiAZ": true,
+    "StorageEncrypted": true,
+    "PubliclyAccessible": false,
+    "Notes": "MultiAZ=true (to-be del TP). Subnets privadas RDS (lab 07-v2). Una base dw con schemas bronce + gold."
+  },
+  "schemas": {
+    "bronce": {
+      "Purpose": "Datos crudos: ETLs (ECS) escriben desde los data sources",
+      "WriteRole": "etl_writer",
+      "ReadRole": "etl_writer"
+    },
+    "gold": {
+      "Purpose": "Analytics / DW procesado: Lambda API solo lectura",
+      "WriteRole": "etl_writer",
+      "ReadRole": "api_reader"
+    }
+  },
+  "secrets": {
+    "master": {
+      "Name": "dw/rds-master",
+      "Description": "Master de RDS tp-dw-db — solo bootstrap / admin"
+    },
+    "etl": {
+      "Name": "dw/rds-etl",
+      "Description": "Credencial ETL (ECS): escritura bronce + lectura/escritura gold"
+    },
+    "api": {
+      "Name": "dw/rds-api",
+      "Description": "Credencial Lambda API: SELECT solo sobre schema gold"
+    }
+  },
+  "security_group": {
+    "Name": "sg-rds",
+    "Description": "Reusa SG del lab 07-v2. Ingress 5432 desde sg-api y sg-ecs-etl.",
+    "VpcLookupTag": "tp-integrador-vpc",
+    "IngressFromSgNames": ["sg-api", "sg-ecs-etl"],
+    "Port": 5432,
+    "CreateIfMissing": false
+  },
+  "db_subnet_group": {
+    "Name": "tp-rds-subnets",
+    "Description": "DB subnet group Multi-AZ — private-rds-a / private-rds-b (lab 07-v2)",
+    "SubnetRoleTag": "rds"
+  },
+  "snapshot": {
+    "S3Bucket": "snapshot-data-lake",
+    "S3Prefix": "rds/tp-dw-db",
+    "Notes": "pg_dump → PutObject al S3 de LocalStack (lab 06). create-db-snapshot queda en MiniStack (API RDS). En AWS real: start-export-task al mismo bucket."
+  },
+  "endpoints": {
+    "localstack": "http://localhost:4566",
+    "ministack": "http://localhost:4567",
+    "Notes": "S3 + EC2 (VPC lab 07-v2) → LocalStack. RDS + Secrets Manager → MiniStack. No compartir :4566."
+  }
+}
