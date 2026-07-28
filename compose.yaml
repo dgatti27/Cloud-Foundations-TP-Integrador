@@ -5,30 +5,31 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-course}
+      POSTGRES_DB: ${POSTGRES_DB_BRONCE:-bronce}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Puerto host propio — NO reusar POSTGRES_PORT (chocaba con postgres-dw)
+      - "${POSTGRES_BRONCE_PORT:-5432}:5432"
     volumes:
       - postgres-data-bronce:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-course}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB_BRONCE:-bronce}"]
       interval: 5s
       timeout: 5s
       retries: 10
-    
+
   postgres-dw:
     image: postgres:16
     container_name: postgres-dw
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-course}
+      POSTGRES_DB: ${POSTGRES_DB_DW:-gold}
     ports:
-      - "${POSTGRES_PORT:-5433}:5432"
+      - "${POSTGRES_DW_PORT:-5433}:5432"
     volumes:
       - postgres-data-dw:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-course}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB_DW:-gold}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -46,10 +47,12 @@ services:
     volumes:
       - minio-data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      # curl ya no viene en la imagen MinIO; mc sí
+      test: ["CMD", "mc", "ready", "local"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 5s
 
   redis:
     image: redis:7
@@ -79,16 +82,30 @@ services:
       timeout: 5s
       retries: 10
 
-  # RDS con Postgres real + Secrets de la DB. Puerto distinto: no pisa LocalStack S3.
+  # RDS Postgres real + Secrets DB. :4567 para no pisar LocalStack S3 (:4566).
   ministack-integrador:
     image: ministackorg/ministack:latest
     container_name: ministack-integrador
+    environment:
+      PERSIST_STATE: "1"
+      RDS_PERSIST: "1"
+      S3_PERSIST: "0"
+      LOG_LEVEL: INFO
+      # Evita chocar con postgres-bronce :5432 / postgres-dw :5433 en el host
+      RDS_BASE_PORT: "15432"
     ports:
       - "4567:4566"
     volumes:
+      - ministack-data:/tmp/ministack-state
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:4566/_ministack/health')",
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -99,3 +116,4 @@ volumes:
   postgres-data-dw:
   minio-data:
   localstack-data:
+  ministack-data:
