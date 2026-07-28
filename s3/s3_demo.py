@@ -1,74 +1,87 @@
 """
-Lab 06 — S3 demo: data lake del modulo + cierre IAM -> ECS/EC2 -> S3.
+Lab 06 — Data lake en MinIO (API S3) + cierre IAM (LocalStack STS).
 
-Automatiza los pasos 1-7 de s3/lab-06.md sobre los tres buckets del lake:
+Automatiza lab-06.md sobre:
   backup-data-lake, snapshot-data-lake, staging-data-lake
 
-  1. Crea los buckets
-  2. Block Public Access ON + encryption SSE-S3
-  3. Versioning desde el inicio
-  4. Sube el objeto de referencia (s3/README.md -> raw/README.md)
-  5. Demuestra versioning sobrescribiendo ese objeto
-  6. Aplica la bucket policy de cada bucket (RW: app-role + usuario2-ops,
-     admin: usuario1-admin)
-  7. Asume app-role, lista los tres buckets y descarga un objeto
-  8. Genera una presigned URL como demo de acceso temporario
+  1. Crea buckets en MinIO
+  2. Encryption SSE-S3 (BPA omitido — MinIO no soporta PutPublicAccessBlock)
+  3. Versioning
+  4. Sube s3/README.md -> raw/README.md
+  5. Demo versioning
+  6. Bucket policies
+  7. AssumeRole en LocalStack + list/get en MinIO
+  8. Presigned URL (MinIO)
+
+LocalStack S3 queda comentado (decisión 002).
 
 Uso:
     python s3/s3_demo.py
 """
 
-import boto3
-from botocore.exceptions import ClientError
+from __future__ import annotations
+
+import os
 from pathlib import Path
 
-ENDPOINT = "http://localhost:4566"
+import boto3
+from botocore.client import Config
+from botocore.exceptions import ClientError
+
+# MinIO = data lake | LocalStack = IAM/STS
+ENDPOINT_MINIO = os.environ.get("MINIO_ENDPOINT", "http://localhost:9000")
+ENDPOINT_LOCALSTACK = os.environ.get("LOCALSTACK_ENDPOINT", "http://localhost:4566")
+# ENDPOINT_LOCALSTACK_S3 = "http://localhost:4566"  # NO usar en el TP
+
 REGION = "us-east-1"
 S3_DIR = Path(__file__).parent
 
 BUCKETS = ["backup-data-lake", "snapshot-data-lake", "staging-data-lake"]
 ROLE_ARN = "arn:aws:iam::000000000000:role/app-role"
 
-# Objeto de referencia del lab: se sube a raw/ en el bucket principal.
 DEMO_SOURCE = S3_DIR / "README.md"
 DEMO_BUCKET = "backup-data-lake"
 DEMO_KEY = "raw/README.md"
 
-BOTO_KWARGS = dict(
-    endpoint_url=ENDPOINT,
+_MINIO_KWARGS = dict(
+    endpoint_url=ENDPOINT_MINIO,
+    region_name=REGION,
+    aws_access_key_id=os.environ.get("MINIO_ROOT_USER", "minioadmin"),
+    aws_secret_access_key=os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin"),
+    config=Config(signature_version="s3v4"),
+)
+
+_LS_KWARGS = dict(
+    endpoint_url=ENDPOINT_LOCALSTACK,
     region_name=REGION,
     aws_access_key_id="test",
     aws_secret_access_key="test",
 )
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
-
 def _exists_error(e: ClientError) -> bool:
     code = e.response["Error"].get("Code", "")
     return code in ("BucketAlreadyOwnedByYou", "BucketAlreadyExists")
 
 
-def make_client(service: str, creds: dict = None):
-    if creds:
-        return boto3.client(
-            service,
-            endpoint_url=ENDPOINT,
-            region_name=REGION,
-            aws_access_key_id=creds["AccessKeyId"],
-            aws_secret_access_key=creds["SecretAccessKey"],
-            aws_session_token=creds["SessionToken"],
-        )
-    return boto3.client(service, **BOTO_KWARGS)
+def make_s3_minio():
+    return boto3.client("s3", **_MINIO_KWARGS)
 
 
-# ── pasos ─────────────────────────────────────────────────────────────────────
+# def make_s3_localstack():
+#     """S3 de LocalStack — comentado (decisión 002)."""
+#     return boto3.client("s3", **_LS_KWARGS)
+
+
+def make_sts():
+    return boto3.client("sts", **_LS_KWARGS)
+
 
 def create_buckets(s3):
     for bucket in BUCKETS:
         try:
             s3.create_bucket(Bucket=bucket)
-            print(f"  bucket '{bucket}' creado")
+            print(f"  bucket '{bucket}' creado (MinIO)")
         except ClientError as e:
             if _exists_error(e):
                 print(f"  bucket '{bucket}' ya existe")
@@ -77,27 +90,31 @@ def create_buckets(s3):
 
 
 def harden_buckets(s3):
-    """Cerrado por defecto: Block Public Access ON + cifrado SSE-S3."""
+    """Encryption SSE-S3. BPA no existe en MinIO — se documenta y se omite."""
     for bucket in BUCKETS:
-        s3.put_public_access_block(
-            Bucket=bucket,
-            PublicAccessBlockConfiguration={
-                "BlockPublicAcls": True,
-                "IgnorePublicAcls": True,
-                "BlockPublicPolicy": True,
-                "RestrictPublicBuckets": True,
-            },
-        )
-        s3.put_bucket_encryption(
-            Bucket=bucket,
-            ServerSideEncryptionConfiguration={
-                "Rules": [{
-                    "ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"},
-                    "BucketKeyEnabled": False,
-                }],
-            },
-        )
-        print(f"  {bucket}: BPA ON (4 flags) + SSE-S3 (AES256)")
+        # --- LocalStack / AWS: PutPublicAccessBlock ---
+        # s3.put_public_access_block(
+        #     Bucket=bucket,
+        #     PublicAccessBlockConfiguration={
+        #         "BlockPublicAcls": True,
+        #         "IgnorePublicAcls": True,
+        #         "BlockPublicPolicy": True,
+        #         "RestrictPublicBuckets": True,
+        #     },
+        # )
+        try:
+            s3.put_bucket_encryption(
+                Bucket=bucket,
+                ServerSideEncryptionConfiguration={
+                    "Rules": [{
+                        "ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"},
+                        "BucketKeyEnabled": False,
+                    }],
+                },
+            )
+            print(f"  {bucket}: SSE-S3 (AES256) — BPA N/A en MinIO")
+        except ClientError as e:
+            print(f"  {bucket}: encryption warn: {e.response['Error'].get('Code')}")
 
 
 def enable_versioning(s3):
@@ -111,7 +128,6 @@ def enable_versioning(s3):
 
 
 def upload_reference_object(s3):
-    """Sube el objeto de referencia. Idempotente: salta si el tamaño coincide."""
     if not DEMO_SOURCE.exists():
         print(f"  WARN: no existe {DEMO_SOURCE}, se omite la carga")
         return
@@ -130,7 +146,6 @@ def upload_reference_object(s3):
 
 
 def demo_versioning(s3):
-    """Sobrescribe el objeto de referencia para mostrar que la version anterior queda."""
     try:
         original = s3.get_object(Bucket=DEMO_BUCKET, Key=DEMO_KEY)["Body"].read()
     except ClientError:
@@ -150,40 +165,44 @@ def demo_versioning(s3):
     print(f"  versiones de '{DEMO_KEY}': {len(versions)}")
     for v in versions[:3]:
         marker = " <- actual" if v["IsLatest"] else ""
-        print(f"    - VersionId={v['VersionId'][:16]}... Size={v['Size']:,}{marker}")
+        print(f"    - VersionId={str(v['VersionId'])[:16]}... Size={v['Size']:,}{marker}")
 
 
 def apply_bucket_policies(s3):
-    """Una policy por bucket: Resource debe coincidir con el bucket al que se adjunta."""
     for bucket in BUCKETS:
         policy_file = S3_DIR / f"bucket_policy_{bucket}.json"
         if not policy_file.exists():
             print(f"  WARN: falta {policy_file.name}, se omite {bucket}")
             continue
-        s3.put_bucket_policy(Bucket=bucket, Policy=policy_file.read_text())
-        print(f"  {bucket}: RW (app-role + usuario2-ops), admin (usuario1-admin)")
+        try:
+            s3.put_bucket_policy(Bucket=bucket, Policy=policy_file.read_text(encoding="utf-8"))
+            print(f"  {bucket}: policy aplicada (API MinIO)")
+        except ClientError as e:
+            print(f"  {bucket}: policy warn: {e.response['Error'].get('Message', e)[:120]}")
 
 
-def assume_role_and_list(sts):
-    print("  asumiendo rol app-role...")
+def assume_role_and_list(sts, s3_minio):
+    print("  asumiendo rol app-role (LocalStack STS)...")
     creds = sts.assume_role(
         RoleArn=ROLE_ARN,
         RoleSessionName="lab06-download",
         DurationSeconds=900,
     )["Credentials"]
-    print(f"  creds temporales obtenidas (expiran: {creds['Expiration']})")
+    print(f"  creds temporales OK (expiran: {creds['Expiration']})")
 
-    s3_assumed = make_client("s3", creds=creds)
+    # STS LocalStack no autentica MinIO — listamos con client MinIO
+    # --- Alternativa LocalStack S3 (NO usar): ---
+    # s3_assumed = boto3.client("s3", endpoint_url=ENDPOINT_LOCALSTACK, ...)
     for bucket in BUCKETS:
-        objects = s3_assumed.list_objects_v2(Bucket=bucket).get("Contents", [])
-        print(f"  {bucket}: {len(objects)} objeto(s)")
+        objects = s3_minio.list_objects_v2(Bucket=bucket).get("Contents", []) or []
+        print(f"  MinIO {bucket}: {len(objects)} objeto(s)")
         for obj in objects[:3]:
             print(f"    - {obj['Key']} ({obj['Size']:,} bytes)")
 
     try:
-        head = s3_assumed.head_object(Bucket=DEMO_BUCKET, Key=DEMO_KEY)
+        head = s3_minio.head_object(Bucket=DEMO_BUCKET, Key=DEMO_KEY)
         print(
-            f"  GetObject como app-role: '{DEMO_KEY}' OK "
+            f"  GetObject MinIO '{DEMO_KEY}' OK "
             f"({head['ContentLength']:,} bytes)"
         )
     except ClientError as e:
@@ -197,13 +216,13 @@ def presigned_url(s3):
         ExpiresIn=300,
     )
     print(f"  presigned URL para '{DEMO_KEY}' (valida 5 min):")
-    print(f"    {url[:100]}...")
+    print(f"    {url[:120]}...")
 
 
 def summary(s3):
     for bucket in BUCKETS:
-        objects = s3.list_objects_v2(Bucket=bucket).get("Contents", [])
-        versions = s3.list_object_versions(Bucket=bucket).get("Versions", [])
+        objects = s3.list_objects_v2(Bucket=bucket).get("Contents", []) or []
+        versions = s3.list_object_versions(Bucket=bucket).get("Versions", []) or []
         total_mb = sum(o["Size"] for o in objects) / (1024 * 1024)
         print(
             f"  {bucket}: {len(objects)} objetos, "
@@ -211,18 +230,19 @@ def summary(s3):
         )
 
 
-# ── main ──────────────────────────────────────────────────────────────────────
-
 def main():
-    print("=== Lab 06 — S3 data lake + cierre IAM -> ECS/EC2 -> S3 ===\n")
+    print("=== Lab 06 — MinIO data lake + IAM/STS LocalStack ===\n")
+    print(f"  MinIO:      {ENDPOINT_MINIO}")
+    print(f"  LocalStack: {ENDPOINT_LOCALSTACK} (IAM/STS; S3 comentado)\n")
 
-    s3 = make_client("s3")
-    sts = make_client("sts")
+    s3 = make_s3_minio()
+    # s3 = make_s3_localstack()  # NO usar en el TP
+    sts = make_sts()
 
-    print("1. Buckets")
+    print("1. Buckets (MinIO)")
     create_buckets(s3)
 
-    print("\n2. Hardening por defecto (BPA + encryption)")
+    print("\n2. Hardening (encryption; BPA N/A en MinIO)")
     harden_buckets(s3)
 
     print("\n3. Versioning")
@@ -231,21 +251,21 @@ def main():
     print("\n4. Objeto de referencia")
     upload_reference_object(s3)
 
-    print("\n5. Demo versioning (sobrescribir el objeto)")
+    print("\n5. Demo versioning")
     demo_versioning(s3)
 
-    print("\n6. Bucket policies (RW + admin) por bucket")
+    print("\n6. Bucket policies")
     apply_bucket_policies(s3)
 
-    print("\n7. AssumeRole + listar/leer — cierre del circulo")
-    assume_role_and_list(sts)
+    print("\n7. AssumeRole (LocalStack) + list/get (MinIO)")
+    assume_role_and_list(sts, s3)
 
-    print("\n8. Presigned URL — acceso temporario sin asumir rol")
+    print("\n8. Presigned URL (MinIO)")
     presigned_url(s3)
 
     print("\n=== Resumen final ===")
     summary(s3)
-    print("\nListar todo: awslocal s3 ls s3://backup-data-lake --recursive")
+    print(f"\nListar: aws --endpoint-url {ENDPOINT_MINIO} s3 ls s3://backup-data-lake --recursive")
 
 
 if __name__ == "__main__":

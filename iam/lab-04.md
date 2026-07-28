@@ -29,7 +29,9 @@ de identidad.
 ```bash
 awslocal iam list-users
 awslocal iam list-roles
-awslocal s3 ls
+# S3 del TP = MinIO (:9000). LocalStack S3 queda fuera (decisión 002):
+# awslocal s3 ls
+aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls
 ```
 
 Al arrancar, LocalStack no tiene usuarios ni roles: partimos de cero, igual
@@ -37,16 +39,48 @@ que una cuenta AWS nueva.
 
 ---
 
-## Paso 2 — Crear el bucket S3 de referencia
+## Paso 2 — Crear el bucket S3 de referencia (MinIO)
+
+Los buckets del data lake viven en **MinIO** (`s3-soporte`, puerto 9000), no en LocalStack.
+IAM (usuarios/roles/policies) sigue en LocalStack (`:4566`).
 
 ```bash
-awslocal s3 mb s3://backup-data-raw
-awslocal s3 mb s3://snapshot-data-raw
-#awslocal s3 cp data/processed/push_events.json s3://course-data-raw/events/push_events.json
-#awslocal s3 ls s3://course-data-raw --recursive
+# Credenciales = MINIO_ROOT_* del compose (default minioadmin/minioadmin)
+export AWS_ACCESS_KEY_ID=minioadmin
+export AWS_SECRET_ACCESS_KEY=minioadmin
+export AWS_DEFAULT_REGION=us-east-1
+MINIO="aws --endpoint-url http://localhost:9000 --region us-east-1"
+
+$MINIO s3 mb s3://backup-data-raw
+$MINIO s3 mb s3://snapshot-data-raw
+$MINIO s3 mb s3://staging-data-raw
+
+$MINIO s3 ls
 ```
 
-Este bucket es el "recurso protegido" sobre el que vamos a definir permisos.
+En PowerShell:
+
+```powershell
+$env:AWS_ACCESS_KEY_ID = "minioadmin"
+$env:AWS_SECRET_ACCESS_KEY = "minioadmin"
+$env:AWS_DEFAULT_REGION = "us-east-1"
+$MINIO = "aws --endpoint-url http://localhost:9000 --region us-east-1"
+
+Invoke-Expression "$MINIO s3 mb s3://backup-data-raw"
+Invoke-Expression "$MINIO s3 mb s3://snapshot-data-raw"
+Invoke-Expression "$MINIO s3 mb s3://staging-data-raw"
+Invoke-Expression "$MINIO s3 ls"
+```
+
+Estos buckets son el "recurso protegido" sobre el que referencian las policies IAM (ARNs `arn:aws:s3:::...`). El enforcement real de esas policies contra MinIO no aplica igual que en AWS; el lab enseña el modelo IAM y el storage queda en MinIO (decisión 002).
+
+```bash
+# --- Alternativa LocalStack S3 (NO usar en el TP; conservada por referencia) ---
+# awslocal s3 mb s3://backup-data-raw
+# awslocal s3 mb s3://snapshot-data-raw
+# awslocal s3 mb s3://staging-data-raw
+# awslocal s3 ls
+```
 
 ---
 
@@ -134,6 +168,9 @@ awslocal sts assume-role --role-arn arn:aws:iam::000000000000:role/app-role --ro
 
 awslocal sts assume-role --role-arn arn:aws:iam::000000000000:role/db-role --role-session-name TP-DB-session --duration-seconds 900
 
+# Listar buckets en MinIO (no awslocal):
+aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls s3://backup-data-raw --recursive
+aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls s3://snapshot-data-raw --recursive
 ```
 
 El response tiene tres campos clave:
@@ -142,15 +179,14 @@ El response tiene tres campos clave:
 - `SessionToken`: obligatorio para autenticar
 - `Expiration`: **las credenciales expiran** — en 15 minutos en este ejemplo
 
-Usá esas credenciales para acceder a S3:
+Usá esas credenciales para listar en MinIO (mismo endpoint `:9000`):
 
 ```bash
-export AWS_ACCESS_KEY_ID="LSIAQAAAAAAAGXHRKBIB"
-export AWS_SECRET_ACCESS_KEY="wSHEtFQsgGne4YyhcwqsxMa5FifO4oyL0BKKhUZ9"
-export AWS_SESSION_TOKEN="FQoGZXIvYXdzEBYaD31C47m2ixej8jhUeVkMagm09qzwT21hIZyJEMH9/fGKUaLQsrc9K5uGrwjV+B2/Eq4owkY3BGMiVaZWouUVo+tPiayMIKcGMTXoEHc0khy8kHM4E2POkYjDj69dHek0IHcqU2emQayQ7tfs1hCruXDpMqw6tIhaUHyIxEPt4xfW/WsPZgKermhilojz1jqe6ezwcTylC+v6hl4Ck6MyphdotAjaRH8DHPgl+WTTfEhX5W+Nq/LhVyAqOQs+GHHQBwDeXm1K/Qg5YyT2KK6YcSQP2qNnA69Q1qR9vwXQoHUVwMjRKkSMWw7IZsS179s7h3GvrQ4Ae9xVKlEW7ZA="
+export AWS_ACCESS_KEY_ID="minioadmin"
+export AWS_SECRET_ACCESS_KEY="minioadmin"
 
-awslocal s3 ls s3://backup-data-raw --recursive
-awslocal s3 ls s3://snapshot-data-raw --recursive
+aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls s3://backup-data-raw --recursive
+aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls s3://snapshot-data-raw --recursive
 ```
 
 ---
@@ -178,7 +214,11 @@ awslocal iam put-user-policy \
   --policy-name DenyEverything \
   --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"*","Resource":"*"}]}'
 
-awslocal s3 ls s3://course-data-raw   # en Community: sigue funcionando
+# Si los buckets estuvieran en LocalStack S3 (comentado — TP usa MinIO):
+# awslocal s3 ls s3://backup-data-raw   # en Community: seguiría funcionando
+
+# En el TP el storage es MinIO (IAM no lo enforcea de todos modos):
+aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls s3://backup-data-raw
 ```
 
 > En AWS real (y LocalStack Pro), el Deny explícito siempre gana sobre cualquier
@@ -212,13 +252,12 @@ Resultado: app-role con inline policy de privilegio mínimo sobre course-data-ra
 
 Al finalizar deberías poder mostrar:
 
-- [ ] Bucket `course-data-raw` con al menos un objeto
-- [ ] Grupo `bigdata-read` con la policy adjuntada
-- [ ] Usuario `lab-user` en el grupo
-- [ ] Rol `app-role` con trust policy para EC2 e inline policy mínima
+- [ ] Buckets `backup-data-raw` / `snapshot-data-raw` / `staging-data-raw` en **MinIO** (`:9000`)
+- [ ] Grupos `bi-ops` / `bi-admin` con policies adjuntadas
+- [ ] Usuarios `usuario2-ops` / `usuario1-admin` en sus grupos
+- [ ] Rol `app-role` (y `db-role`) con trust policy + inline policy
 - [ ] Output del `sts assume-role` con `Expiration` visible
 - [ ] Decisión 005 en `docs/decisions.md`
-- [ ] Columna "identidad/credencial" en `docs/architecture.md` revisada
 
 ---
 

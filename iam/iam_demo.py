@@ -2,27 +2,32 @@
 Lab 04 — IAM demo: grupos, usuarios, roles y credenciales temporales vía STS.
 
 Automatiza los pasos 2-7 de iam/lab-04.md:
-  2. Buckets de referencia: backup-data-raw y snapshot-data-raw
+  2. Buckets de referencia en MinIO: backup/snapshot/staging-data-raw
   3. Grupos bi-ops / bi-admin con policies administradas (S3RWTP / S3AdminTP)
   4. Usuarios usuario2-ops -> bi-ops y usuario1-admin -> bi-admin
   5. Access key de larga duración (para observar el riesgo)
   6. Roles app-role (trust ECS) y db-role (trust RDS export) con inline policy
-  7. AssumeRole vía STS -> credenciales temporales -> listar buckets
+  7. AssumeRole vía STS -> credenciales temporales -> listar buckets en MinIO
 
-Corre contra LocalStack Community (mecánica de IAM, sin enforcement real).
-Para enforcement real de Deny, usá LocalStack Pro o una cuenta AWS.
+IAM/STS → LocalStack (:4566).
+Buckets → MinIO (:9000). LocalStack S3 queda comentado (decisión 002).
 
 Uso:
     python iam/iam_demo.py
 """
 
-import boto3
-from botocore.exceptions import ClientError
+import os
 from pathlib import Path
 
-ENDPOINT = "http://localhost:4566"
+import boto3
+from botocore.exceptions import ClientError
+
+ENDPOINT = "http://localhost:4566"  # IAM / STS
+# LocalStack S3 (NO usar en el TP — conservado por referencia):
+# ENDPOINT_LOCALSTACK_S3 = "http://localhost:4566"
+S3_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "http://localhost:9000")  # decisión 002
 REGION = "us-east-1"
-BUCKETS = ["backup-data-raw", "snapshot-data-raw"]
+BUCKETS = ["backup-data-raw", "snapshot-data-raw", "staging-data-raw"]
 IAM_DIR = Path(__file__).parent
 
 # grupo -> (policy administrada, archivo de policy)
@@ -50,6 +55,13 @@ BOTO_KWARGS = dict(
     aws_secret_access_key="test",
 )
 
+S3_BOTO_KWARGS = dict(
+    endpoint_url=S3_ENDPOINT,
+    region_name=REGION,
+    aws_access_key_id=os.environ.get("MINIO_ROOT_USER", "minioadmin"),
+    aws_secret_access_key=os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin"),
+)
+
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -64,20 +76,42 @@ def make_client(service: str):
     return boto3.client(service, **BOTO_KWARGS)
 
 
+def make_s3_minio():
+    """Buckets del lab viven en MinIO, no en LocalStack S3."""
+    return boto3.client("s3", **S3_BOTO_KWARGS)
+
+
+# def make_s3_localstack():
+#     """S3 de LocalStack — comentado a propósito (decisión 002 / persistencia)."""
+#     return boto3.client(
+#         "s3",
+#         endpoint_url=ENDPOINT,  # o ENDPOINT_LOCALSTACK_S3
+#         region_name=REGION,
+#         aws_access_key_id="test",
+#         aws_secret_access_key="test",
+#     )
+
+
 # ── pasos del lab ─────────────────────────────────────────────────────────────
 
 def ensure_buckets(s3):
-    """Paso 2 — buckets de referencia (recurso protegido)."""
+    """Paso 2 — buckets de referencia en MinIO (recurso protegido)."""
     for bucket in BUCKETS:
         try:
             s3.head_bucket(Bucket=bucket)
-            print(f"  bucket '{bucket}' ya existe")
+            print(f"  bucket '{bucket}' ya existe ({S3_ENDPOINT})")
         except ClientError:
+            # MinIO / path-style: CreateBucket sin LocationConstraint en us-east-1
             s3.create_bucket(Bucket=bucket)
             s3.put_object(
                 Bucket=bucket, Key="sample/hello.txt", Body=b"hello from lab-04"
             )
-            print(f"  bucket '{bucket}' creado con objeto de ejemplo")
+            print(f"  bucket '{bucket}' creado en MinIO con objeto de ejemplo")
+
+    # --- Alternativa LocalStack S3 (NO usar en el TP) ---
+    # s3_ls = make_s3_localstack()
+    # for bucket in BUCKETS:
+    #     s3_ls.create_bucket(Bucket=bucket)
 
 
 def create_groups_with_policies(iam):
@@ -176,7 +210,7 @@ def create_roles(iam):
 
 
 def assume_role_and_use_s3(sts, role_arn: str, session_name: str):
-    """Paso 7 — AssumeRole vía STS y uso de credenciales temporales en S3."""
+    """Paso 7 — AssumeRole vía STS (LocalStack) y listado de buckets en MinIO."""
     print(f"\n  asumiendo rol: {role_arn} (session: {session_name})")
     resp = sts.assume_role(
         RoleArn=role_arn,
@@ -185,22 +219,28 @@ def assume_role_and_use_s3(sts, role_arn: str, session_name: str):
     )
     creds = resp["Credentials"]
     print(f"  AccessKeyId:  {creds['AccessKeyId']}")
-    print(f"  Expiration:   {creds['Expiration']}  <- credencial temporal")
+    print(f"  Expiration:   {creds['Expiration']}  <- credencial temporal (STS/LocalStack)")
 
-    s3_temp = boto3.client(
-        "s3",
-        endpoint_url=ENDPOINT,
-        region_name=REGION,
-        aws_access_key_id=creds["AccessKeyId"],
-        aws_secret_access_key=creds["SecretAccessKey"],
-        aws_session_token=creds["SessionToken"],
-    )
-
+    # STS de LocalStack no autentica MinIO: listamos con el client MinIO
+    s3_minio = make_s3_minio()
     for bucket in BUCKETS:
-        objects = s3_temp.list_objects_v2(Bucket=bucket).get("Contents", [])
-        print(f"  objetos en '{bucket}' con credenciales temporales:")
+        objects = s3_minio.list_objects_v2(Bucket=bucket).get("Contents", [])
+        print(f"  objetos en MinIO '{bucket}':")
         for obj in objects:
             print(f"    - {obj['Key']} ({obj['Size']} bytes)")
+
+    # --- Alternativa: listar con credenciales STS contra LocalStack S3 (NO usar) ---
+    # s3_temp = boto3.client(
+    #     "s3",
+    #     endpoint_url=ENDPOINT,
+    #     region_name=REGION,
+    #     aws_access_key_id=creds["AccessKeyId"],
+    #     aws_secret_access_key=creds["SecretAccessKey"],
+    #     aws_session_token=creds["SessionToken"],
+    # )
+    # for bucket in BUCKETS:
+    #     objects = s3_temp.list_objects_v2(Bucket=bucket).get("Contents", [])
+    #     print(f"  objetos LocalStack S3 '{bucket}': {len(objects)}")
 
     return creds
 
@@ -210,13 +250,16 @@ def assume_role_and_use_s3(sts, role_arn: str, session_name: str):
 def main():
     print("=== Lab 04 — IAM demo ===\n")
     print("AVISO: LocalStack Community no enforcea policies (Deny no bloquea).")
-    print("       Practicamos la mecánica: crear, adjuntar, asumir.\n")
+    print("       Practicamos la mecánica: crear, adjuntar, asumir.")
+    print(f"       Buckets → MinIO {S3_ENDPOINT} | IAM/STS → LocalStack {ENDPOINT}")
+    print("       LocalStack S3 comentado (compose + este script).\n")
 
     iam = make_client("iam")
-    s3 = make_client("s3")
+    s3 = make_s3_minio()
+    # s3 = make_s3_localstack()  # NO usar en el TP
     sts = make_client("sts")
 
-    print("1. Buckets S3 de referencia")
+    print("1. Buckets S3 de referencia (MinIO)")
     ensure_buckets(s3)
 
     print("\n2. Grupos + policies administradas")

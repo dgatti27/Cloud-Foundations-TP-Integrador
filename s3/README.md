@@ -1,28 +1,35 @@
-# `s3/` — moldes para el lab 06
+# `s3/` — Lab 06: data lake en MinIO (API S3)
 
-Un archivo que define la bucket policy que cierra el círculo IAM → EC2 → S3.
+Object storage del TP: **MinIO** (`s3-soporte`, `:9000`). LocalStack S3 queda comentado en compose y labs (decisión 002).
 
 ## Archivos
 
-### `bucket_policy.json`
+| Archivo | Rol |
+|---|---|
+| [`lab-06.md`](./lab-06.md) | Guía paso a paso (MinIO + `s3api`) |
+| [`s3_demo.py`](./s3_demo.py) | Orquestación end-to-end |
+| `bucket_policy_*-data-lake.json` | Resource policies por bucket |
+| `bucket_policy.json` | Molde genérico (referencia) |
 
-Resource-based policy aplicada al bucket `course-data-lake`. Hace dos cosas:
+## Endpoints
 
-1. **`AllowInstanceRoleReadObjects`** — autoriza `s3:GetObject` sobre `raw/*` y `processed/*` solo al rol `app-role` (el del lab 04, usado como instance profile en lab 05).
-2. **`AllowInstanceRoleListBucket`** — autoriza `s3:ListBucket` sobre el bucket con condición de prefix.
+| Qué | Dónde |
+|---|---|
+| Buckets lake / raw | MinIO `:9000` (`minioadmin`) |
+| IAM / STS (`app-role`) | LocalStack `:4566` |
+| LocalStack S3 | Comentado — no usar |
 
-**Principal:** `arn:aws:iam::000000000000:role/app-role` — en LocalStack la cuenta es siempre `000000000000`. Para AWS real, reemplazar por tu account ID.
+```powershell
+$env:AWS_ACCESS_KEY_ID = "minioadmin"
+$env:AWS_SECRET_ACCESS_KEY = "minioadmin"
+python s3/s3_demo.py
+```
 
-## Cómo se conecta con identity-based policies (lab 04)
+## Identity vs resource policy
 
-| Capa | Quién decide | Qué dice |
+| Capa | Dónde | En el TP |
 |---|---|---|
-| Identity policy (lab 04) | IAM en la identidad | "el rol `app-role` puede `s3:GetObject` sobre `course-data-raw/*`" |
-| Resource policy (lab 06) | El bucket | "el bucket `course-data-lake` deja entrar a `app-role` para `raw/*` y `processed/*`" |
+| Identity (lab 04) | LocalStack IAM | Policies `S3RWTP` / `S3AdminTP` |
+| Resource (lab 06) | MinIO `put-bucket-policy` | JSON por bucket |
 
-**Regla de evaluación:** acceso = (identidad permite) Y (recurso no niega). Un `Deny` explícito en cualquier lado gana.
-
-Para que la EC2 con instance profile lea `course-data-lake/raw/customers.csv` necesitamos las dos cosas alineadas — o agregamos el bucket a la identity policy del rol, o el bucket trust al rol (lo que hace este JSON).
-
-## LocalStack Community
-S3 en Community es real, incluyendo bucket policies. Las acciones funcionan completas: `put-bucket-policy`, `get-bucket-policy`, evaluación de acceso en `GetObject`. Lo único parcial es lifecycle (transición a Glacier) y replication cross-region.
+En AWS real ambas se evalúan juntas. Acá IAM no enforcea MinIO: el lab enseña el modelo y persiste el lake en volume Docker.

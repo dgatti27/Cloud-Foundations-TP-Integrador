@@ -9,24 +9,24 @@ Una instancia RDS PostgreSQL Multi-AZ (`tp-dw-db`), base `dw`, con:
 | `bronce` | ECS ETL (`etl_writer`) | Solo ETL | Datos crudos desde data sources |
 | `gold` | ECS ETL grupo 2 (`etl_writer`) | Lambda API (`api_reader`) | Analytics / DW procesado |
 
-> **Engine real vía MiniStack + S3 en LocalStack**  
+> **Engine real vía MiniStack + object storage MinIO**  
 > MiniStack (`:4567`) levanta Postgres real con `create-db-instance`.  
-> LocalStack (`:4566`) conserva los buckets del lab 06 (`snapshot-data-lake`) y la VPC del lab 07-v2.  
-> El dump del snapshot se sube al S3 de **LocalStack**, no al de MiniStack.
+> MinIO (`:9000`) guarda el dump del snapshot (`snapshot-data-lake`) — decisión 002.  
+> LocalStack (`:4566`) = VPC lab 07-v2 / IAM. **S3 de LocalStack queda comentado** en `compose.yaml`.
 
 ---
 
 ## Prerequisitos
 
 ```bash
-# Ambos emuladores (puertos distintos)
-docker compose up -d localstack-integrador ministack-integrador
+# Emuladores + MinIO
+docker compose up -d localstack-integrador ministack-integrador s3-soporte
 
 # Lab 04 — roles IAM (LocalStack)
 awslocal iam get-role --role-name app-role --query "Role.Arn"
 
-# Lab 06 — bucket de snapshots (LocalStack :4566)
-awslocal s3 ls | findstr snapshot-data-lake
+# Bucket de snapshots en MinIO (:9000)
+aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls | findstr snapshot-data-lake
 
 # Lab 07-v2 — VPC + SG + subnets RDS (LocalStack)
 awslocal ec2 describe-vpcs --filters Name=tag:Name,Values=tp-integrador-vpc \
@@ -35,13 +35,13 @@ awslocal ec2 describe-security-groups --filters Name=group-name,Values=sg-rds \
   --query "SecurityGroups[0].GroupId"
 
 # MiniStack arriba
-curl -s http://localhost:4567/_localstack/health
+curl -s http://localhost:4567/_ministack/health
 ```
 
 Si falta el bucket:
 
 ```bash
-awslocal s3 mb s3://snapshot-data-lake
+aws --endpoint-url http://localhost:9000 --region us-east-1 s3 mb s3://snapshot-data-lake
 ```
 
 ---
@@ -62,8 +62,8 @@ Decisiones respecto al lab-08 del curso:
 | Subnets | 1 privada genérica | `private-rds-a` + `private-rds-b` | Multi-AZ real |
 | Instance | `db.t3.micro` / Single-AZ | `db.t3.medium` / **MultiAZ=true** | To-be del TP |
 | Schemas | `public` + `analytics` | **`bronce` + `gold`** | Medallón del DW |
-| Snapshot | solo API RDS | API MiniStack + **dump a S3 LocalStack** | Bucket `snapshot-data-lake` del lab 06 |
-| Endpoint | uno solo `:4566` | **LocalStack `:4566` + MiniStack `:4567`** | S3/VPC vs RDS/Secrets |
+| Snapshot | solo API RDS | API MiniStack + **dump a MinIO** | Bucket `snapshot-data-lake` |
+| Endpoint | uno solo `:4566` | **MinIO `:9000` + LocalStack `:4566` + MiniStack `:4567`** | lake / VPC / RDS |
 
 ---
 
@@ -83,7 +83,7 @@ Secuencia:
 6. `seed_tp.sql` (schemas, roles, tablas demo)
 7. Secrets app: `dw/rds-etl`, `dw/rds-api`
 8. Verificar privilegios
-9. Snapshot RDS (MiniStack) + `pg_dump` → **S3 LocalStack** `s3://snapshot-data-lake/...`
+9. Snapshot RDS (MiniStack) + `pg_dump` → **MinIO** `s3://snapshot-data-lake/...`
 
 Output esperado (extracto):
 
@@ -99,7 +99,7 @@ Output esperado (extracto):
     etl_can_insert_bronce=true
     etl_can_insert_gold=true
 
-9. Snapshot RDS + dump a s3://snapshot-data-lake
+9. Snapshot RDS + dump a MinIO s3://snapshot-data-lake
   ✓ RDS snapshot: tp-dw-db-snap-...
   ✓ dump en s3://snapshot-data-lake/rds/tp-dw-db/...
 ```
@@ -170,16 +170,19 @@ INSERT INTO gold.dim_origen VALUES (99,'x','x');  -- ERROR: permission denied
 
 ```bash
 awslocal rds describe-db-snapshots --db-instance-identifier tp-dw-db
+# (si awslocal no apunta a MiniStack:)
+# aws --endpoint-url http://localhost:4567 rds describe-db-snapshots --db-instance-identifier tp-dw-db
 
-awslocal s3 ls s3://snapshot-data-lake/rds/tp-dw-db/ --recursive
+aws --endpoint-url http://localhost:9000 --region us-east-1 \
+  s3 ls s3://snapshot-data-lake/rds/tp-dw-db/ --recursive
 ```
 
-| En el lab (ministack) | En AWS real |
+| En el lab (ministack + MinIO) | En AWS real |
 |---|---|
-| `create-db-snapshot` (API) | Igual (snapshot gestionado RDS) |
-| `pg_dump` → `PutObject` al bucket | `start-export-task` (export a Parquet en S3) con rol `db-role` (trust `export.rds.amazonaws.com`) |
+| `create-db-snapshot` (API MiniStack) | Igual (snapshot gestionado RDS) |
+| `pg_dump` → `PutObject` a MinIO | `start-export-task` (export a Parquet en S3) con rol `db-role` |
 
-El bucket `snapshot-data-lake` ya tiene BPA, encryption y bucket policy del lab 06. El dump hereda esa protección.
+El bucket vive en el volume `minio-data` (sobrevive a `docker compose down` sin `-v`).
 
 ---
 

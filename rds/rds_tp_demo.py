@@ -1,11 +1,11 @@
 """
-TP Integrador — RDS PostgreSQL (bronce + gold) vía MiniStack + S3 en LocalStack.
+TP Integrador — RDS PostgreSQL (bronce + gold) vía MiniStack + object storage MinIO.
 
-Endpoints separados (no comparten :4566):
-  LocalStack :4566  → S3 (snapshot-data-lake del lab 06) + EC2 (VPC lab 07-v2)
+Endpoints:
+  MinIO      :9000  → S3 API (snapshot-data-lake, staging, backups) — decisión 002
+  LocalStack :4566  → EC2/VPC (lab 07-v2), IAM, etc.
+                      # S3 de LocalStack queda comentado en compose (no usar para el lake)
   MiniStack  :4567  → RDS (Postgres real) + Secrets Manager (credenciales DB)
-
-Reusa VPC/SG/subnets del lab 07-v2 en LocalStack. No recrea sg-rds.
 
 Uso:
     python rds/rds_tp_demo.py
@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 
 import boto3
+from botocore.client import Config
 from botocore.exceptions import ClientError
 
 REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
@@ -29,7 +30,6 @@ ROOT = Path(__file__).resolve().parent.parent
 CFG = json.loads((ROOT / "rds" / "rds_tp_config.json").read_text(encoding="utf-8"))
 SEED_SQL = ROOT / "rds" / "seed_tp.sql"
 
-# Dual endpoint: S3/EC2 en LocalStack; RDS/Secrets en MiniStack
 ENDPOINT_LOCALSTACK = os.environ.get(
     "LOCALSTACK_ENDPOINT",
     CFG.get("endpoints", {}).get("localstack", "http://localhost:4566"),
@@ -38,22 +38,48 @@ ENDPOINT_MINISTACK = os.environ.get(
     "MINISTACK_ENDPOINT",
     CFG.get("endpoints", {}).get("ministack", "http://localhost:4567"),
 )
+ENDPOINT_MINIO = os.environ.get(
+    "MINIO_ENDPOINT",
+    CFG.get("endpoints", {}).get("minio", "http://localhost:9000"),
+)
 
-_CREDS = dict(
+_LS_CREDS = dict(
     region_name=REGION,
     aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "test"),
     aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "test"),
 )
 
+_MINIO_CREDS = dict(
+    region_name=REGION,
+    aws_access_key_id=os.environ.get("MINIO_ROOT_USER", "minioadmin"),
+    aws_secret_access_key=os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin"),
+)
+
 
 def client_localstack(service: str):
-    """S3 (buckets lab 06) y EC2 (VPC lab 07-v2)."""
-    return boto3.client(service, endpoint_url=ENDPOINT_LOCALSTACK, **_CREDS)
+    """EC2/VPC (lab 07-v2). No usar para el data lake — eso es MinIO."""
+    return boto3.client(service, endpoint_url=ENDPOINT_LOCALSTACK, **_LS_CREDS)
+
+
+def client_minio_s3():
+    """Object storage del TP (snapshot / staging / backup)."""
+    return boto3.client(
+        "s3",
+        endpoint_url=ENDPOINT_MINIO,
+        config=Config(signature_version="s3v4"),
+        **_MINIO_CREDS,
+    )
+
+
+# Alternativa conservada (NO usar en el TP — data lake = MinIO):
+# def client_localstack_s3():
+#     """S3 de LocalStack — comentado a propósito (decisión 002 / persistencia)."""
+#     return boto3.client("s3", endpoint_url=ENDPOINT_LOCALSTACK, **_LS_CREDS)
 
 
 def client_ministack(service: str):
     """RDS + Secrets Manager de la base."""
-    return boto3.client(service, endpoint_url=ENDPOINT_MINISTACK, **_CREDS)
+    return boto3.client(service, endpoint_url=ENDPOINT_MINISTACK, **_LS_CREDS)
 
 
 def _already_exists(e: ClientError) -> bool:
@@ -318,12 +344,10 @@ def ensure_snapshot_bucket(s3) -> str:
     bucket = CFG["snapshot"]["S3Bucket"]
     try:
         s3.head_bucket(Bucket=bucket)
-        print(f"  bucket s3://{bucket} OK")
+        print(f"  bucket s3://{bucket} OK (MinIO {ENDPOINT_MINIO})")
     except ClientError:
-        raise SystemExit(
-            f"ERROR: falta el bucket '{bucket}' (lab 06). "
-            f"Corré: awslocal s3 mb s3://{bucket}"
-        )
+        s3.create_bucket(Bucket=bucket)
+        print(f"  bucket s3://{bucket} creado en MinIO")
     return bucket
 
 
@@ -399,12 +423,14 @@ def show_secret_map(endpoint_host: str) -> None:
 
 def main() -> int:
     print("=== TP Integrador — RDS dw (bronce + gold) ===\n")
-    print(f"  LocalStack (S3+EC2): {ENDPOINT_LOCALSTACK}")
-    print(f"  MiniStack  (RDS+SM): {ENDPOINT_MINISTACK}\n")
+    print(f"  MinIO      (S3 lake):  {ENDPOINT_MINIO}")
+    print(f"  LocalStack (EC2/VPC):  {ENDPOINT_LOCALSTACK}")
+    print(f"  MiniStack  (RDS+SM):   {ENDPOINT_MINISTACK}\n")
 
-    # LocalStack: buckets lab 06 + VPC lab 07-v2
+    # LocalStack: solo VPC lab 07-v2 (S3 LocalStack comentado — decisión 002)
     ec2 = client_localstack("ec2")
-    s3 = client_localstack("s3")
+    # MinIO: dump de snapshot / data lake
+    s3 = client_minio_s3()
     # MiniStack: engine Postgres real + secrets de la DB
     rds = client_ministack("rds")
     sm = client_ministack("secretsmanager")
@@ -435,7 +461,7 @@ def main() -> int:
     print("\n8. Verificar privilegios y filas demo")
     verify_access(identifier, master_password)
 
-    print("\n9. Snapshot RDS (MiniStack) + dump → S3 LocalStack (snapshot-data-lake)")
+    print("\n9. Snapshot RDS (MiniStack) + dump → MinIO (snapshot-data-lake)")
     snap_id, s3_uri = take_snapshot_and_upload_s3(rds, s3, identifier, master_password)
 
     print("\n=== Resumen ===")
@@ -444,11 +470,11 @@ def main() -> int:
     print(f"  Schemas:    bronce (ETL write) | gold (API read)")
     print(f"  SG:         {db_sg_id} (sg-rds en LocalStack)")
     print(f"  Snapshot:   {snap_id}  (API MiniStack)")
-    print(f"  S3 dump:    {s3_uri}  [{ENDPOINT_LOCALSTACK}]")
+    print(f"  S3 dump:    {s3_uri}  [{ENDPOINT_MINIO}]")
     print()
     print("Inspección:")
     print(f"  aws --endpoint-url {ENDPOINT_MINISTACK} rds describe-db-instances --db-instance-identifier {identifier}")
-    print(f"  aws --endpoint-url {ENDPOINT_LOCALSTACK} s3 ls s3://{CFG['snapshot']['S3Bucket']}/{CFG['snapshot']['S3Prefix']}/")
+    print(f"  aws --endpoint-url {ENDPOINT_MINIO} s3 ls s3://{CFG['snapshot']['S3Bucket']}/{CFG['snapshot']['S3Prefix']}/")
     print(f"  docker exec -it {_container_name(identifier)} psql -U dwadmin -d dw")
     print("  → \\dn   \\dt bronce.*   \\dt gold.*")
     return 0

@@ -56,11 +56,12 @@
   "snapshot": {
     "S3Bucket": "snapshot-data-lake",
     "S3Prefix": "rds/tp-dw-db",
-    "Notes": "pg_dump → PutObject al S3 de LocalStack (lab 06). create-db-snapshot queda en MiniStack (API RDS). En AWS real: start-export-task al mismo bucket."
+    "Notes": "pg_dump → PutObject a MinIO (:9000). create-db-snapshot en MiniStack. En AWS real: start-export-task al mismo bucket."
   },
   "endpoints": {
+    "minio": "http://localhost:9000",
     "localstack": "http://localhost:4566",
     "ministack": "http://localhost:4567",
-    "Notes": "S3 + EC2 (VPC lab 07-v2) → LocalStack. RDS + Secrets Manager → MiniStack. No compartir :4566."
+    "Notes": "MinIO = data lake S3. LocalStack = EC2/VPC/IAM (S3 LocalStack deshabilitado). MiniStack = RDS + Secrets DB."
   }
 }

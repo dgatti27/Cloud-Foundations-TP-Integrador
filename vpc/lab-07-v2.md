@@ -29,15 +29,20 @@ ETL → EFS (NFS en compute)
 
 - Branch de trabajo desde `main`
 - Lab 04 corrido (`app-role`, policies IAM)
-- Lab 06 corrido (buckets lake): `backup-data-lake`, `snapshot-data-lake`, `staging-data-lake`
-- Servicios activos: `docker compose up -d`
+- Lab 06 corrido — buckets lake en **MinIO** (`:9000`): `backup-data-lake`, `snapshot-data-lake`, `staging-data-lake`
+- Servicios activos: `docker compose up -d` (LocalStack para EC2/VPC; MinIO para el lake)
 - `awslocal --version` responde
 
 ```bash
 # Verificar dependencias
 awslocal iam get-role --role-name app-role --query "Role.Arn"
-awslocal s3 ls | findstr data-lake
-# Linux/macOS: awslocal s3 ls | grep data-lake
+
+# Lake = MinIO (decisión 002). LocalStack S3 queda comentado en compose.
+aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls | findstr data-lake
+# Linux/macOS: aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls | grep data-lake
+
+# --- LocalStack S3 (NO usar en el TP) ---
+# awslocal s3 ls | findstr data-lake
 ```
 
 Variables usadas en todos los pasos:
@@ -363,10 +368,14 @@ SGs son **stateful** y **solo allow**.
 
 ---
 
-## Paso 7 — VPC endpoint Gateway a S3 (data lake sin NAT)
+## Paso 7 — VPC endpoint Gateway a S3 (modelo AWS / to-be)
 
-El endpoint es al **servicio S3 de la región**, no a un bucket por nombre.  
-Tus buckets del lab 06 (`backup-data-lake`, `snapshot-data-lake`, `staging-data-lake`) se usan igual; cambia el **camino de red**. Quien autoriza sigue siendo **IAM + bucket policy**.
+El endpoint es al **servicio S3 de la región AWS** (`com.amazonaws.<region>.s3`), no a un bucket por nombre ni a MinIO.
+
+**En el TP (local):**
+- El **data lake** vive en **MinIO** (`:9000`) — lab 06 / decisión 002.
+- Este Gateway endpoint **no enruta** a MinIO; modela el camino de red que en AWS real usarán ETL/API/RDS hacia S3 **sin NAT**.
+- Quién autoriza en AWS: **IAM + bucket policy**. En local, MinIO usa sus propias keys/policies.
 
 ```bash
 ENDPOINT_S3=$($AWS ec2 create-vpc-endpoint \
@@ -385,6 +394,12 @@ $AWS ec2 describe-route-tables --route-table-ids "$RT_RDS" \
   --query "RouteTables[0].Routes"
 ```
 
+```bash
+# Verificar lake local (MinIO), no LocalStack S3:
+aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls
+# awslocal s3 ls   # NO usar en el TP
+```
+
 ### Rutas que quedan
 
 **`RT_COMPUTE`:**
@@ -401,11 +416,12 @@ $AWS ec2 describe-route-tables --route-table-ids "$RT_RDS" \
 
 ```text
 ETL ──NAT──► Internet (fuentes)
-ETL / API / RDS ──vpce──► S3 data lake (lab 06)
+ETL / API / RDS ──vpce──► S3 AWS (to-be; modelado en LocalStack EC2)
+En local el lake operativo ──► MinIO :9000 (lab 06)
 BI ──IGW──► ALB ──► Lambda API
 ```
 
-Cierra el arco: IAM (04) + S3 (06) + camino de red privado al storage; NAT solo para orígenes.
+Cierra el arco: IAM (04) + MinIO lake (06) + topología de red to-be (endpoint S3 + NAT solo para orígenes).
 
 ---
 
@@ -591,14 +607,16 @@ $AWS ec2 delete-vpc --vpc-id "$VPC_ID"
 ## Paso 10 — Documentar en `decisions.md`
 
 ```
-### 008-v2 - VPC Multi-AZ del TP: ALB + NAT ETL + endpoint S3
+### 008-v2 - VPC Multi-AZ del TP: ALB + NAT ETL + endpoint S3 (to-be)
 
 Decision: VPC 10.0.0.0/16 Multi-AZ con (1) subredes públicas para ALB HTTPS
 consumido por BI, (2) NAT solo en RT_COMPUTE para que los ETL en ECS salgan
 a fuentes en Internet, (3) RDS en privadas sin egress, (4) VPC endpoint
-Gateway a S3 para el data lake (sin usar NAT para storage).
+Gateway a S3 (modelo AWS). En local el lake operativo es MinIO; LocalStack S3
+queda comentado.
 
-Contexto: separar entrada (BI→API) de salida (ETL→fuentes) y de storage (S3).
+Contexto: separar entrada (BI→API) de salida (ETL→fuentes) y de storage.
+El endpoint enseña el camino privado a S3 en AWS; no sustituye a MinIO en el lab.
 Mezclar todo por NAT encarece y amplía superficie.
 
 Tradeoff: NAT tiene costo horario; un solo NAT no es HA cross-AZ. Endpoint S3

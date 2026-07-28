@@ -12,8 +12,8 @@ Provisiona la RDS del proyecto: **una instancia PostgreSQL Multi-AZ** con schema
 | [`rds_tp_demo.py`](./rds_tp_demo.py) | Orquestación end-to-end |
 
 ```bash
-# Prereqs: lab 04 + 06 + 07-v2 en LocalStack :4566, MiniStack :4567
-docker compose up -d localstack-integrador ministack-integrador
+# Prereqs: VPC en LocalStack :4566, MiniStack :4567, MinIO :9000
+docker compose up -d localstack-integrador ministack-integrador s3-soporte
 python rds/rds_tp_demo.py
 ```
 
@@ -21,10 +21,11 @@ python rds/rds_tp_demo.py
 
 | Emulador | Puerto | Servicios en este lab |
 |---|---|---|
-| LocalStack | `:4566` | S3 (`snapshot-data-lake`), EC2/VPC (lab 07-v2) |
+| MinIO | `:9000` | S3 lake (`snapshot-data-lake`, staging, backup) |
+| LocalStack | `:4566` | EC2/VPC (lab 07-v2), IAM — **S3 comentado** en compose |
 | MiniStack | `:4567` | RDS (Postgres real), Secrets Manager (credenciales DB) |
 
-El dump del snapshot **siempre** va al S3 de LocalStack, no al de MiniStack.
+El dump del snapshot va a **MinIO**, no a LocalStack ni a MiniStack.
 
 ### Decisiones del TP
 

@@ -98,7 +98,9 @@ Una subred es **pública** solo si tiene ruta a un **IGW**. No hay flag “make 
 - **VPC endpoint S3** = storage del data lake **sin** usar NAT ni Internet.  
 - **RDS** = sin egress a Internet.
 
-El endpoint **no** se ata a un bucket por nombre: es el servicio S3 de la región. Los buckets del lab 06 se usan con las policies IAM / bucket policy ya definidas.
+El endpoint **Gateway a `com.amazonaws.<region>.s3`** modela el camino AWS to-be.
+Los buckets del lab 06 viven en **MinIO** (`:9000`); LocalStack S3 está comentado.
+Autorización en AWS = **IAM + bucket policy**; en local MinIO usa sus keys/policies.
 
 ---
 
@@ -135,11 +137,11 @@ Un solo NAT (AZ-a) alcanza para el lab. En producción HA: un NAT por AZ. **Cost
 | Atributo | Valor |
 |---|---|
 | Tipo | `Gateway` |
-| Servicio | `com.amazonaws.<region>.s3` |
+| Servicio | `com.amazonaws.<region>.s3` (modelo AWS to-be) |
 | Route tables | `rt-private-compute`, `rt-private-rds` |
-| Buckets del TP | `backup-data-lake`, `snapshot-data-lake`, `staging-data-lake` (+ raw del lab 04 vía IAM) |
+| Lake local (lab 06) | **MinIO** `:9000` — no pasa por este endpoint |
 
-Autorización = **IAM** (`app-role`, `S3RWTP`, etc.) + **bucket policies**. El endpoint solo cambia el camino de red.
+El endpoint documenta el camino privado a S3 en AWS. En el lab el storage operativo es MinIO; LocalStack S3 está comentado.
 
 ---
 
