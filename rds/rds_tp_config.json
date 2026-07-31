@@ -1,5 +1,8 @@
 {
+  "_comment": "Plan declarativo del lab 08-TP. Lo consume rds_tp_demo.py. No ejecuta nada por sí solo.",
+
   "db_instance": {
+    "_comment": "Parámetros de create-db-instance en MiniStack (:4567). Una sola RDS PostgreSQL Multi-AZ; la base 'dw' aloja schemas bronce + gold.",
     "Identifier": "tp-dw-db",
     "Engine": "postgres",
     "EngineVersion": "16.3",
@@ -14,7 +17,9 @@
     "PubliclyAccessible": false,
     "Notes": "MultiAZ=true (to-be del TP). Subnets privadas RDS (lab 07-v2). Una base dw con schemas bronce + gold."
   },
+
   "schemas": {
+    "_comment": "Diseño lógico dentro de la base 'dw' (seed_tp.sql). No son dos RDS: son dos schemas con roles distintos.",
     "bronce": {
       "Purpose": "Datos crudos: ETLs (ECS) escriben desde los data sources",
       "WriteRole": "etl_writer",
@@ -26,7 +31,9 @@
       "ReadRole": "api_reader"
     }
   },
+
   "secrets": {
+    "_comment": "Nombres en Secrets Manager (MiniStack). Tres credenciales: master (bootstrap), ETL (ECS), API (Lambda).",
     "master": {
       "Name": "dw/rds-master",
       "Description": "Master de RDS tp-dw-db — solo bootstrap / admin"
@@ -40,7 +47,9 @@
       "Description": "Credencial Lambda API: SELECT solo sobre schema gold"
     }
   },
+
   "security_group": {
+    "_comment": "No crea el SG: reusa sg-rds del lab 07-v2 (LocalStack EC2). Lookup por nombre + VPC tag.",
     "Name": "sg-rds",
     "Description": "Reusa SG del lab 07-v2. Ingress 5432 desde sg-api y sg-ecs-etl.",
     "VpcLookupTag": "tp-integrador-vpc",
@@ -48,17 +57,23 @@
     "Port": 5432,
     "CreateIfMissing": false
   },
+
   "db_subnet_group": {
+    "_comment": "Grupo de subnets Multi-AZ para RDS. Busca subnets con tag Role=rds en la VPC del lab 07-v2.",
     "Name": "tp-rds-subnets",
     "Description": "DB subnet group Multi-AZ — private-rds-a / private-rds-b (lab 07-v2)",
     "SubnetRoleTag": "rds"
   },
+
   "snapshot": {
+    "_comment": "Destino del dump/snapshot. En local: pg_dump → MinIO. En AWS real: export-task al mismo bucket S3.",
     "S3Bucket": "snapshot-data-lake",
     "S3Prefix": "rds/tp-dw-db",
     "Notes": "pg_dump → PutObject a MinIO (:9000). create-db-snapshot en MiniStack. En AWS real: start-export-task al mismo bucket."
   },
+
   "endpoints": {
+    "_comment": "URLs locales de cada emulador. El demo apunta boto3/CLI al servicio correcto según la operación.",
     "minio": "http://localhost:9000",
     "localstack": "http://localhost:4566",
     "ministack": "http://localhost:4567",

@@ -171,6 +171,7 @@ awslocal sts assume-role --role-arn arn:aws:iam::000000000000:role/db-role --rol
 # Listar buckets en MinIO (no awslocal):
 aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls s3://backup-data-raw --recursive
 aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls s3://snapshot-data-raw --recursive
+aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls s3://staging-data-raw --recursive
 ```
 
 El response tiene tres campos clave:
@@ -187,6 +188,7 @@ export AWS_SECRET_ACCESS_KEY="minioadmin"
 
 aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls s3://backup-data-raw --recursive
 aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls s3://snapshot-data-raw --recursive
+aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls s3://staging-data-raw --recursive
 ```
 
 ---

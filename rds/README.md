@@ -8,7 +8,7 @@ Provisiona la RDS del proyecto: **una instancia PostgreSQL Multi-AZ** con schema
 |---|---|
 | [`lab-08-tp.md`](./lab-08-tp.md) | Guía paso a paso del TP |
 | [`rds_tp_config.json`](./rds_tp_config.json) | Parámetros declarativos |
-| [`seed_tp.sql`](./seed_tp.sql) | Schemas, roles, GRANTs, tablas demo |
+| [`seed_tp.sql`](./seed_tp.sql) | Schemas, roles, GRANTs, bronce staging + Modelo_DW (gold) |
 | [`rds_tp_demo.py`](./rds_tp_demo.py) | Orquestación end-to-end |
 
 ```bash

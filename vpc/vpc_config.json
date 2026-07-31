@@ -1,29 +1,29 @@
 {
-  "vpc_id": "vpc-a6b69f55f0e219d10",
+  "vpc_id": "vpc-98fea469ae55148a4",
   "region": "us-east-1",
   "subnets": {
-    "public_a": "subnet-41b911de63e402350",
-    "public_b": "subnet-7fd8595d777141f3f",
-    "rds_a": "subnet-408ebde2e5ec937f1",
-    "rds_b": "subnet-038183ca4e1c8a766",
-    "compute_a": "subnet-5d072a4660841dfc9",
-    "compute_b": "subnet-a80055a211ce92193"
+    "public_a": "subnet-9102bda8298b8ae6e",
+    "public_b": "subnet-4ea42c7ff4165b7b1",
+    "rds_a": "subnet-254363357356c5e93",
+    "rds_b": "subnet-6dffc44fe27b6788d",
+    "compute_a": "subnet-805d156f01430d344",
+    "compute_b": "subnet-888a0d85a005ebf7d"
   },
   "route_tables": {
-    "public": "rtb-5d37f7acf46b23b07",
-    "rds": "rtb-24c7a7bddb16a0078",
-    "compute": "rtb-bae8685159974b2ac"
+    "public": "rtb-a8defb66730417e40",
+    "rds": "rtb-4b025a5926b9cbac0",
+    "compute": "rtb-569577db3777bf901"
   },
-  "igw": "igw-9f02088250b7636ba",
-  "nat": "nat-d8433f604cfc1450e",
-  "eip_alloc": "eipalloc-99c68454d58a83a10",
+  "igw": "igw-63b7ac4d474ae9630",
+  "nat": "nat-5d7f9b76c724df6b6",
+  "eip_alloc": "eipalloc-391f669ae9ad5287d",
   "security_groups": {
-    "alb": "sg-81bc55d552a347e27",
-    "api": "sg-e199bee139ec295f0",
-    "ecs_etl": "sg-9e19e05bf8cbc667c",
-    "rds": "sg-9895e69372952cdc4",
-    "efs": "sg-8c6f05846799d570a"
+    "alb": "sg-38aa479f0dcf2fdee",
+    "api": "sg-bda870f92b2d6c926",
+    "ecs_etl": "sg-36fc8213ef14bca95",
+    "rds": "sg-e8161fbc482b0ab67",
+    "efs": "sg-fcdeaba5b39e87b45"
   },
-  "endpoint_s3": "vpce-63aa0c4f55e8e2948",
-  "notes": "Endpoint S3 modela AWS to-be; lake operativo = MinIO :9000. LocalStack S3 no se usa en el TP."
+  "endpoint_s3": "vpce-d16320f89dee7e751",
+  "notes": "Endpoint S3 modela AWS to-be; lake = MinIO. PERSISTENCE=1 activo; no usar --force-recreate salvo necesidad."
 }

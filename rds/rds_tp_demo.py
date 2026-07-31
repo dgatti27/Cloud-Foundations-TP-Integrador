@@ -246,7 +246,32 @@ def wait_available(rds, identifier: str, timeout_s: int = 90) -> dict:
 
 
 def _container_name(identifier: str) -> str:
-    return f"ministack-rds-{identifier}"
+    """MiniStack nombra el container como ministack-rds-<hash>-instance-<id> (no solo ministack-rds-<id>)."""
+    candidates = [
+        f"ministack-rds-{identifier}",
+        f"ministack-rds-instance-{identifier}",
+    ]
+    listed = subprocess.run(
+        ["docker", "ps", "--format", "{{.Names}}", "--filter", "name=ministack-rds"],
+        capture_output=True,
+        text=True,
+    )
+    names = [n.strip() for n in listed.stdout.splitlines() if n.strip()]
+    for name in names:
+        if name.endswith(identifier) or name.endswith(f"instance-{identifier}"):
+            return name
+    for name in candidates:
+        probe = subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Running}}", name],
+            capture_output=True,
+            text=True,
+        )
+        if probe.returncode == 0 and probe.stdout.strip() == "true":
+            return name
+    raise SystemExit(
+        f"ERROR: no encuentro container Docker de RDS '{identifier}'. "
+        f"Vistos: {names or '(ninguno)'}. ¿MiniStack levantó la instancia?"
+    )
 
 
 def _psql(identifier: str, password: str, sql: str, *, tuples_only: bool = False) -> subprocess.CompletedProcess:
@@ -259,13 +284,17 @@ def _psql(identifier: str, password: str, sql: str, *, tuples_only: bool = False
     ]
     if tuples_only:
         cmd += ["-tA"]
-    return subprocess.run(
+    # Bytes UTF-8: en Windows text=True usa cp1252 y rompe con → / ─ del seed.
+    result = subprocess.run(
         cmd,
-        input=sql,
+        input=sql.encode("utf-8"),
         capture_output=True,
-        text=True,
-        env={**os.environ, "PGPASSWORD": password},
+        env={**os.environ, "PGPASSWORD": password, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
     )
+    # Normalizar a str para los callers
+    result.stdout = (result.stdout or b"").decode("utf-8", errors="replace")
+    result.stderr = (result.stderr or b"").decode("utf-8", errors="replace")
+    return result
 
 
 def apply_seed(identifier: str, password: str) -> None:
@@ -281,7 +310,7 @@ def apply_seed(identifier: str, password: str) -> None:
 
     result = _psql(identifier, password, SEED_SQL.read_text(encoding="utf-8"))
     if result.returncode == 0:
-        print("  ✓ seed_tp.sql aplicado (schemas bronce + gold, roles, tablas demo)")
+        print("  ✓ seed_tp.sql aplicado (schemas bronce + gold, roles, Modelo_DW)")
     else:
         raise SystemExit(f"ERROR psql seed:\n{result.stderr.strip()[:500]}")
 
@@ -324,13 +353,15 @@ def verify_access(identifier: str, password: str) -> None:
 SELECT 'schemas=' || string_agg(nspname, ',' ORDER BY nspname)
 FROM pg_namespace WHERE nspname IN ('bronce','gold');
 SELECT 'bronce.ingest_batch=' || count(*) FROM bronce.ingest_batch;
-SELECT 'gold.dim_origen=' || count(*) FROM gold.dim_origen;
-SELECT 'gold.fact_ingesta_diaria=' || count(*) FROM gold.fact_ingesta_diaria;
-SELECT 'api_can_select_gold=' || has_table_privilege('api_reader', 'gold.dim_origen', 'SELECT');
-SELECT 'api_can_insert_gold=' || has_table_privilege('api_reader', 'gold.dim_origen', 'INSERT');
+SELECT 'gold.tables=' || count(*) FROM information_schema.tables
+WHERE table_schema = 'gold' AND table_type = 'BASE TABLE';
+SELECT 'gold.dim_producto=' || count(*) FROM gold.dim_producto;
+SELECT 'gold.dim_fecha=' || count(*) FROM gold.dim_fecha;
+SELECT 'api_can_select_gold=' || has_table_privilege('api_reader', 'gold.dim_producto', 'SELECT');
+SELECT 'api_can_insert_gold=' || has_table_privilege('api_reader', 'gold.dim_producto', 'INSERT');
 SELECT 'api_can_select_bronce=' || has_table_privilege('api_reader', 'bronce.raw_record', 'SELECT');
 SELECT 'etl_can_insert_bronce=' || has_table_privilege('etl_writer', 'bronce.raw_record', 'INSERT');
-SELECT 'etl_can_insert_gold=' || has_table_privilege('etl_writer', 'gold.fact_ingesta_diaria', 'INSERT');
+SELECT 'etl_can_insert_gold=' || has_table_privilege('etl_writer', 'gold.fact_venta_linea', 'INSERT');
 """
     result = _psql(identifier, password, checks, tuples_only=True)
     if result.returncode != 0:

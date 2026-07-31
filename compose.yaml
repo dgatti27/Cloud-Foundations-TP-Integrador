@@ -43,7 +43,8 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
       # KMS mínimo para lab: habilita put-bucket-encryption / SSE-S3 (NO usar en prod)
       # Formato: <nombre-key>:<32-bytes-en-base64>
-      MINIO_KMS_SECRET_KEY: ${MINIO_KMS_SECRET_KEY:-tp-lab-key:dGVzdGtleXRlc3RrZXl0ZXN0a2V5MTIzNDU2Nzg=}
+      # Debe ser name:<base64 de exactamente 32 bytes>. La clave anterior tenía 29 y MinIO abortaba.
+      MINIO_KMS_SECRET_KEY: ${MINIO_KMS_SECRET_KEY:-tp-lab-key:YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXowMTIzNDU=}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -60,8 +61,11 @@ services:
   redis:
     image: redis:7
     container_name: redis-integrador
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
+    volumes:
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -78,6 +82,10 @@ services:
       # SERVICES: s3,sqs,sns,lambda,dynamodb,events,cloudwatch,logs,iam,ec2,secretsmanager
       SERVICES: sqs,sns,lambda,dynamodb,events,cloudwatch,logs,iam,ec2,secretsmanager
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      # Persiste IAM/EC2/VPC/etc. en el volumen localstack-data entre reinicios.
+      # Sin esto, un restart deja solo la VPC default (como pasó con tp-integrador-vpc).
+      # Ojo: `docker compose down -v` borra el volumen y sí pierde todo.
+      PERSISTENCE: "1"
     ports:
       - "4566:4566"
     volumes:
@@ -122,5 +130,6 @@ volumes:
   postgres-data-bronce:
   postgres-data-dw:
   minio-data:
+  redis-data:
   localstack-data:
   ministack-data:

@@ -80,7 +80,7 @@ Secuencia:
 3. DB subnet group `tp-rds-subnets`
 4. `create-db-instance` → container postgres
 5. Wait `available`
-6. `seed_tp.sql` (schemas, roles, tablas demo)
+6. `seed_tp.sql` (schemas, roles, bronce staging + Modelo_DW en gold)
 7. Secrets app: `dw/rds-etl`, `dw/rds-api`
 8. Verificar privilegios
 9. Snapshot RDS (MiniStack) + `pg_dump` → **MinIO** `s3://snapshot-data-lake/...`
@@ -91,8 +91,9 @@ Output esperado (extracto):
 8. Verificar privilegios y filas demo
     schemas=bronce,gold
     bronce.ingest_batch=1
-    gold.dim_origen=4
-    gold.fact_ingesta_diaria=4
+    gold.tables=19
+    gold.dim_producto=1
+    gold.dim_fecha=1
     api_can_select_gold=true
     api_can_insert_gold=false
     api_can_select_bronce=false
@@ -110,12 +111,12 @@ Output esperado (extracto):
 
 ```text
 dw/
-├── bronce/                 ← crudo (ETL escribe)
+├── bronce/                 ← crudo / staging (ETL escribe)
 │   ├── ingest_batch
 │   └── raw_record
-└── gold/                   ← analytics (API lee)
-    ├── dim_origen
-    └── fact_ingesta_diaria
+└── gold/                   ← DW Modelo_DW (API lee)
+    ├── dim_* / bridge_*
+    └── fact_*
 ```
 
 ### Capas de control
@@ -139,10 +140,40 @@ BI ──HTTPS──► ALB ──► Lambda (api_reader)
 
 ---
 
-## Paso 4 — Explorar a mano
+## Paso 4 — Verificar MiniStack y explorar la DB
 
-```bash
-docker exec -it ministack-rds-tp-dw-db psql -U dwadmin -d dw
+Credenciales API MiniStack: `test` / `test`. Endpoint: `http://localhost:4567`.
+
+```powershell
+$env:AWS_ACCESS_KEY_ID = "test"
+$env:AWS_SECRET_ACCESS_KEY = "test"
+$env:AWS_DEFAULT_REGION = "us-east-1"
+
+# Health (en PowerShell usá curl.exe, no el alias curl)
+curl.exe -s http://localhost:4567/_ministack/health
+
+# Instancia RDS
+aws --endpoint-url http://localhost:4567 rds describe-db-instances `
+  --query "DBInstances[].{Id:DBInstanceIdentifier,Status:DBInstanceStatus,Endpoint:Endpoint.Address,Port:Endpoint.Port}" `
+  --output table
+
+# Secrets del lab
+aws --endpoint-url http://localhost:4567 secretsmanager list-secrets `
+  --query "SecretList[].Name" --output table
+
+# Snapshots RDS (API MiniStack)
+aws --endpoint-url http://localhost:4567 rds describe-db-snapshots `
+  --db-instance-identifier tp-dw-db --output table
+```
+
+Entrar a Postgres (MiniStack nombra el container `ministack-rds-<hash>-instance-tp-dw-db`):
+
+```powershell
+# Descubrir el nombre real
+docker ps --filter "name=ministack-rds" --format "{{.Names}}"
+
+# Ejemplo (ajustá el nombre si cambia el hash):
+docker exec -it ministack-rds-281afe4a44d7-instance-tp-dw-db psql -U dwadmin -d dw
 ```
 
 Dentro de `psql`:
@@ -159,22 +190,28 @@ SELECT * FROM bronce.ingest_batch;
 
 -- Simular API (solo gold)
 SET ROLE api_reader;
-SELECT * FROM gold.dim_origen;          -- OK
+SELECT * FROM gold.dim_producto;        -- OK (fila SK=-1)
 SELECT * FROM bronce.raw_record;        -- ERROR: permission denied
-INSERT INTO gold.dim_origen VALUES (99,'x','x');  -- ERROR: permission denied
+INSERT INTO gold.dim_producto ("producto_sk","producto_bk","categoria_sk","fecha_desde","es_vigente")
+  VALUES (99,'x',-1,CURRENT_DATE,true); -- ERROR: permission denied
 ```
 
 ---
 
-## Paso 5 — Snapshot y bucket S3
+## Paso 5 — Verificar MinIO (S3) y snapshot
 
-```bash
-awslocal rds describe-db-snapshots --db-instance-identifier tp-dw-db
-# (si awslocal no apunta a MiniStack:)
-# aws --endpoint-url http://localhost:4567 rds describe-db-snapshots --db-instance-identifier tp-dw-db
+Credenciales MinIO: `minioadmin` / `minioadmin`. Endpoint: `http://localhost:9000`. UI: http://localhost:9001
 
-aws --endpoint-url http://localhost:9000 --region us-east-1 \
-  s3 ls s3://snapshot-data-lake/rds/tp-dw-db/ --recursive
+```powershell
+$env:AWS_ACCESS_KEY_ID = "minioadmin"
+$env:AWS_SECRET_ACCESS_KEY = "minioadmin"
+$env:AWS_DEFAULT_REGION = "us-east-1"
+
+# Listar buckets del lake
+aws --endpoint-url http://localhost:9000 s3 ls
+
+# Dump del lab 08 (tras el paso 9 del demo)
+aws --endpoint-url http://localhost:9000 s3 ls s3://snapshot-data-lake/rds/tp-dw-db/ --recursive
 ```
 
 | En el lab (ministack + MinIO) | En AWS real |
@@ -183,6 +220,8 @@ aws --endpoint-url http://localhost:9000 --region us-east-1 \
 | `pg_dump` → `PutObject` a MinIO | `start-export-task` (export a Parquet en S3) con rol `db-role` |
 
 El bucket vive en el volume `minio-data` (sobrevive a `docker compose down` sin `-v`).
+
+> **No mezclar endpoints:** MinIO = `:9000` · LocalStack (VPC/IAM) = `:4566` · MiniStack (RDS/Secrets) = `:4567`.
 
 ---
 
@@ -204,11 +243,12 @@ secret = secretsmanager.get_secret_value(SecretId="dw/rds-api")
 ## Checkpoint
 
 - [ ] `python rds/rds_tp_demo.py` termina sin error
+- [ ] MiniStack: `tp-dw-db` available + secrets `dw/rds-*`
+- [ ] MinIO: buckets lake listables; objeto en `s3://snapshot-data-lake/rds/tp-dw-db/`
 - [ ] `\dn` muestra `bronce` y `gold`
 - [ ] `api_can_select_gold=true` y `api_can_select_bronce=false`
 - [ ] `etl_can_insert_bronce=true`
 - [ ] Snapshot RDS `available`
-- [ ] Objeto en `s3://snapshot-data-lake/rds/tp-dw-db/`
 - [ ] SG usado = `sg-rds` (no se creó otro)
 
 ---
@@ -218,6 +258,6 @@ secret = secretsmanager.get_secret_value(SecretId="dw/rds-api")
 | Archivo | Rol |
 |---|---|
 | `rds_tp_config.json` | Parámetros de instancia, secrets, subnet group, bucket snapshot |
-| `seed_tp.sql` | Schemas, roles, GRANTs, tablas demo |
+| `seed_tp.sql` | Schemas, roles, GRANTs, bronce staging + Modelo_DW en gold |
 | `rds_tp_demo.py` | Orquestación end-to-end |
 | `lab-08.md` | Lab del curso (referencia; no pisar) |
