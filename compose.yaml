@@ -34,6 +34,25 @@ services:
       timeout: 5s
       retries: 10
 
+  # Lab extra — origen ERP (Clientes / Productos / Ventas). Seed en etl/erp/seed_erp.sql
+  postgres-erp:
+    image: postgres:16
+    container_name: postgres-erp
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB_ERP:-erp}
+    ports:
+      - "${POSTGRES_ERP_PORT:-5434}:5432"
+    volumes:
+      - postgres-data-erp:/var/lib/postgresql/data
+      - ./etl/erp/seed_erp.sql:/docker-entrypoint-initdb.d/01_seed_erp.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB_ERP:-erp}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   s3-soporte:
     image: minio/minio
     container_name: s3-soporte
@@ -79,7 +98,8 @@ services:
       LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:?Set LOCALSTACK_AUTH_TOKEN (Hobby)}
       # S3 del TP = MinIO (:9000). LocalStack S3 queda fuera para no duplicar el lake (decisión 002).
       # Para reactivar S3 en LocalStack, descomentar "s3," en la lista:
-      # SERVICES: s3,sqs,sns,lambda,dynamodb,events,cloudwatch,logs,iam,ec2,secretsmanager
+      # S3 del TP = MinIO. ecs/efs requieren LocalStack Pro — lab 09b usa stand-in Docker (ver ecs/).
+      # SERVICES: s3,sqs,...,ecs,efs
       SERVICES: sqs,sns,lambda,dynamodb,events,cloudwatch,logs,iam,ec2,secretsmanager
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
       # Persiste IAM/EC2/VPC/etc. en el volumen localstack-data entre reinicios.
@@ -129,6 +149,7 @@ services:
 volumes:
   postgres-data-bronce:
   postgres-data-dw:
+  postgres-data-erp:
   minio-data:
   redis-data:
   localstack-data:

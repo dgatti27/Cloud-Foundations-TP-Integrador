@@ -1,30 +1,41 @@
-# ECS Fargate + EFS — Airflow ETL → Bronce
+# ECS / Airflow ETL → Bronce (lab 09b)
 
-Lab del TP Integrador: [`lab-09b-tp.md`](./lab-09b-tp.md)
+Lab: [`lab-09b-tp.md`](./lab-09b-tp.md) — **solo lo ejecutable en LocalStack Hobby**.  
+Script: [`ecs_demo.py`](./ecs_demo.py) — automatiza pasos 0–4 (recomendado).
 
-Arquitectura de referencia (fuente de verdad del to-be):
+Arquitectura to-be: [`docs/Infraestructure_Architecture.md`](../docs/Infraestructure_Architecture.md), [`docs/Solution_Architecture.md`](../docs/Solution_Architecture.md).
 
-- [`docs/Infraestructure_Architecture.md`](../docs/Infraestructure_Architecture.md)
-- [`docs/Solution_Architecture.md`](../docs/Solution_Architecture.md) (§4 componentes / §5.2 Fargate+EFS)
+## Alcance Hobby
 
-## Qué hay acá
-
-| Pieza | Archivo |
+| Incluido | Fuera (Pro / AWS real) |
 |---|---|
-| Paso a paso | `lab-09b-tp.md` |
-| IAM trust / policies | `trust_ecs.json`, `execution_policy.json`, `task_secrets_policy.json` |
-| Stand-in Airflow (≈ Fargate + EFS) | `docker-compose.airflow.yaml` + `efs-standin/` |
-| DAG demo → bronce | `efs-standin/dags/etl_bronce_origen_demo.py` |
+| IAM roles execution + task | `ecs create-cluster` / task definitions |
+| `efs-standin/` ≈ EFS | `efs create-file-system` |
+| Compose Airflow → `bronce` | Fargate + mount NFS |
 
-## Prerrequisitos
-
-Labs 04 (IAM), 07-v2 (VPC), 08-tp (RDS `bronce` + `dw/rds-etl`).
-
-## Quick start (ejecución local)
+## Quick start
 
 ```powershell
-docker compose up -d
-# seguir pasos IAM/EFS/ECS del lab; para correr el ETL:
-docker compose -f ecs/docker-compose.airflow.yaml up -d
-# UI http://localhost:8080  admin/admin → trigger etl_bronce_origen_demo
+# Prereqs labs 04, 07-v2, 08-tp + compose base up
+$env:AWS_ACCESS_KEY_ID = "test"
+$env:AWS_SECRET_ACCESS_KEY = "test"
+$env:AWS_DEFAULT_REGION = "us-east-1"
+$env:PYTHONIOENCODING = "utf-8"
+
+python ecs/ecs_demo.py
+# UI http://localhost:8080  admin/admin
 ```
+
+ETL ERP → Bronce → Gold (lab extra): ver [`../etl/lab-extra-tp.md`](../etl/lab-extra-tp.md).
+DAGs: `etl_erp_to_bronce`, `etl_bronce_to_gold`.
+
+## Archivos
+
+| Archivo | Rol |
+|---|---|
+| `lab-09b-tp.md` | Paso a paso comentado (qué / por qué) |
+| `ecs_demo.py` | Demo Python (IAM → secret → Compose → DAG → bronce) |
+| `IAM-NOTES.md` | Roles 1.1 / 1.2 |
+| `docker-compose.airflow.yaml` | Stand-in Fargate |
+| `efs-standin/` | Stand-in EFS |
+| `*_policy.json` / `trust_ecs.json` | IAM |

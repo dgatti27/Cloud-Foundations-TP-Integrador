@@ -1,0 +1,60 @@
+[2026-08-02T12:27:42.566+0000] {processor.py:161} INFO - Started process (PID=994) to work on /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:27:42.567+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/etl_bronce_to_gold.py for tasks to queue
+[2026-08-02T12:27:42.569+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:27:42.568+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:27:42.596+0000] {processor.py:840} INFO - DAG(s) 'etl_bronce_to_gold' retrieved from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:27:42.695+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:27:42.695+0000] {override.py:1858} INFO - Created Permission View: can edit on DAG:etl_bronce_to_gold
+[2026-08-02T12:27:42.702+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:27:42.701+0000] {override.py:1858} INFO - Created Permission View: can delete on DAG:etl_bronce_to_gold
+[2026-08-02T12:27:42.706+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:27:42.705+0000] {override.py:1858} INFO - Created Permission View: can read on DAG:etl_bronce_to_gold
+[2026-08-02T12:27:42.706+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:27:42.706+0000] {dag.py:3089} INFO - Sync 1 DAGs
+[2026-08-02T12:27:42.714+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:27:42.714+0000] {dag.py:3111} INFO - Creating ORM DAG for etl_bronce_to_gold
+[2026-08-02T12:27:42.715+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:27:42.715+0000] {dag.py:3947} INFO - Setting next_dagrun for etl_bronce_to_gold to None, run_after=None
+[2026-08-02T12:27:42.728+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/etl_bronce_to_gold.py took 0.167 seconds
+[2026-08-02T12:28:13.565+0000] {processor.py:161} INFO - Started process (PID=1009) to work on /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:28:13.566+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/etl_bronce_to_gold.py for tasks to queue
+[2026-08-02T12:28:13.567+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:28:13.567+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:28:13.579+0000] {processor.py:840} INFO - DAG(s) 'etl_bronce_to_gold' retrieved from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:28:13.603+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:28:13.603+0000] {dag.py:3089} INFO - Sync 1 DAGs
+[2026-08-02T12:28:13.616+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:28:13.616+0000] {dag.py:3947} INFO - Setting next_dagrun for etl_bronce_to_gold to None, run_after=None
+[2026-08-02T12:28:13.639+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/etl_bronce_to_gold.py took 0.078 seconds
+[2026-08-02T12:28:44.526+0000] {processor.py:161} INFO - Started process (PID=1024) to work on /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:28:44.527+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/etl_bronce_to_gold.py for tasks to queue
+[2026-08-02T12:28:44.528+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:28:44.528+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:28:44.541+0000] {processor.py:840} INFO - DAG(s) 'etl_bronce_to_gold' retrieved from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:28:44.567+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:28:44.567+0000] {dag.py:3089} INFO - Sync 1 DAGs
+[2026-08-02T12:28:44.577+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:28:44.577+0000] {dag.py:3947} INFO - Setting next_dagrun for etl_bronce_to_gold to None, run_after=None
+[2026-08-02T12:28:44.591+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/etl_bronce_to_gold.py took 0.070 seconds
+[2026-08-02T12:29:15.488+0000] {processor.py:161} INFO - Started process (PID=1039) to work on /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:29:15.489+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/etl_bronce_to_gold.py for tasks to queue
+[2026-08-02T12:29:15.491+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:29:15.490+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:29:15.510+0000] {processor.py:840} INFO - DAG(s) 'etl_bronce_to_gold' retrieved from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:29:15.542+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:29:15.542+0000] {dag.py:3089} INFO - Sync 1 DAGs
+[2026-08-02T12:29:15.552+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:29:15.552+0000] {dag.py:3947} INFO - Setting next_dagrun for etl_bronce_to_gold to None, run_after=None
+[2026-08-02T12:29:15.582+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/etl_bronce_to_gold.py took 0.098 seconds
+[2026-08-02T12:29:46.270+0000] {processor.py:161} INFO - Started process (PID=1054) to work on /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:29:46.271+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/etl_bronce_to_gold.py for tasks to queue
+[2026-08-02T12:29:46.272+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:29:46.272+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:29:46.284+0000] {processor.py:840} INFO - DAG(s) 'etl_bronce_to_gold' retrieved from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:29:46.314+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:29:46.314+0000] {dag.py:3089} INFO - Sync 1 DAGs
+[2026-08-02T12:29:46.324+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:29:46.324+0000] {dag.py:3947} INFO - Setting next_dagrun for etl_bronce_to_gold to None, run_after=None
+[2026-08-02T12:29:46.348+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/etl_bronce_to_gold.py took 0.083 seconds
+[2026-08-02T12:30:17.175+0000] {processor.py:161} INFO - Started process (PID=1069) to work on /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:30:17.176+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/etl_bronce_to_gold.py for tasks to queue
+[2026-08-02T12:30:17.177+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:30:17.177+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:30:17.190+0000] {processor.py:840} INFO - DAG(s) 'etl_bronce_to_gold' retrieved from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:30:17.217+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:30:17.216+0000] {dag.py:3089} INFO - Sync 1 DAGs
+[2026-08-02T12:30:17.229+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:30:17.229+0000] {dag.py:3947} INFO - Setting next_dagrun for etl_bronce_to_gold to None, run_after=None
+[2026-08-02T12:30:17.255+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/etl_bronce_to_gold.py took 0.084 seconds
+[2026-08-02T12:30:47.353+0000] {processor.py:161} INFO - Started process (PID=1084) to work on /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:30:47.353+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/etl_bronce_to_gold.py for tasks to queue
+[2026-08-02T12:30:47.355+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:30:47.355+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:30:47.366+0000] {processor.py:840} INFO - DAG(s) 'etl_bronce_to_gold' retrieved from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:30:47.392+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:30:47.392+0000] {dag.py:3089} INFO - Sync 1 DAGs
+[2026-08-02T12:30:47.402+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:30:47.402+0000] {dag.py:3947} INFO - Setting next_dagrun for etl_bronce_to_gold to None, run_after=None
+[2026-08-02T12:30:47.418+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/etl_bronce_to_gold.py took 0.070 seconds
+[2026-08-02T12:31:18.192+0000] {processor.py:161} INFO - Started process (PID=1099) to work on /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:31:18.193+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/etl_bronce_to_gold.py for tasks to queue
+[2026-08-02T12:31:18.195+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:31:18.195+0000] {dagbag.py:545} INFO - Filling up the DagBag from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:31:18.211+0000] {processor.py:840} INFO - DAG(s) 'etl_bronce_to_gold' retrieved from /opt/airflow/dags/etl_bronce_to_gold.py
+[2026-08-02T12:31:18.242+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:31:18.241+0000] {dag.py:3089} INFO - Sync 1 DAGs
+[2026-08-02T12:31:18.254+0000] {logging_mixin.py:188} INFO - [2026-08-02T12:31:18.253+0000] {dag.py:3947} INFO - Setting next_dagrun for etl_bronce_to_gold to None, run_after=None
+[2026-08-02T12:31:18.281+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/etl_bronce_to_gold.py took 0.093 seconds

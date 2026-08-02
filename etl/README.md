@@ -1,45 +1,55 @@
 # Paquete ETL
 
-Lógica de los ETL del Datawarehouse, **separada de la orquestación** (los DAGs
-de Airflow viven en `../iac/local-docker/airflow/dags/`). Los DAGs importan
-desde este paquete; así el código es testeable sin levantar Airflow.
+Lógica de los ETL del Datawarehouse, **separada de la orquestación**.
+Los DAGs de Airflow viven en `../ecs/efs-standin/dags/` e importan este paquete
+(`PYTHONPATH=/opt/airflow/packages` en el compose de Airflow).
+
+## Lab extra (recomendado)
+
+Guía completa: [`lab-extra-tp.md`](./lab-extra-tp.md)
+
+```text
+ERP (postgres-erp) → bronce.erp_* → gold.dim_* / fact_venta_linea
+     DAG etl_erp_to_bronce              DAG etl_bronce_to_gold
+```
 
 ## Estructura
 
 ```
 etl/
-├── config.py            # de dónde salen las conexiones (Secrets Manager en AWS,
-│                        # variables de entorno en local)
-├── extract/             # un módulo por origen (conexión por host, no por API)
-│   ├── erp_foxpro.py        # ERP (tablas FoxPro)
-│   ├── ecommerce_mongo.py   # Ecommerce (MongoDB)
-│   ├── eventos_mongo.py     # Eventos (MongoDB)
-│   └── scraping.py          # repositorio de scraping
-├── transform/           # limpieza y normalización a esquema uniforme
-│   └── normalize.py
-└── load/                # carga por etapas
-    ├── to_cruda.py          # ETL grupo 1 -> base CRUDA
-    └── to_dw.py             # ETL grupo 2 -> Datawarehouse
+├── lab-extra-tp.md      # Paso a paso ERP → Bronce → Gold
+├── config.py            # Secrets MiniStack / env
+├── db.py                # psycopg2 helpers
+├── pipelines.py         # run_erp_to_bronce / run_bronce_to_gold
+├── erp/seed_erp.sql     # Seed origen ERP
+├── sql/bronce_erp_ddl.sql
+├── extract/
+│   ├── erp_foxpro.py        # Grupo 1: lee Postgres ERP
+│   ├── from_bronce.py       # Grupo 2: lee bronce.erp_*
+│   ├── ecommerce_mongo.py   # (stub otros orígenes)
+│   ├── eventos_mongo.py
+│   └── scraping.py
+├── transform/
+│   ├── normalize.py         # Grupo 1
+│   └── to_gold.py           # Grupo 2 → modelo dimensional
+└── load/
+    ├── to_cruda.py          # → schema bronce
+    └── to_dw.py             # → schema gold
 ```
 
 ## Flujo (2 etapas)
 
 ```
-extract.<origen>()  ->  transform.normalize_records()  ->  load.load_to_cruda()   [grupo 1]
-                                                             load.load_to_dw()      [grupo 2]
+extract.erp_*() → transform.normalize_erp_*() → load.load_erp_to_bronce()   [grupo 1]
+extract.from_bronce() → transform.to_gold() → load.load_gold_bundle()       [grupo 2]
 ```
-
-## Cómo completarlo
-
-1. En cada `extract/*.py`, implementá la conexión real por host al origen
-   (FoxPro/DBF, `pymongo` para Mongo, HTTP/archivos para scraping).
-2. En `load/to_cruda.py` y `load/to_dw.py`, implementá los `INSERT`/`UPSERT`
-   con `psycopg2` (ver `requirements.txt`).
-3. Las credenciales: en AWS salen de Secrets Manager (`USE_SECRETS_MANAGER=1`);
-   en local, de variables de entorno (`ORIGEN_*_CONN`, `DW_CRUDA_CONN`, `DW_DW_CONN`).
 
 ## Test rápido (sin Airflow)
 
-```bash
-python -c "from etl.extract import EXTRACTORS; print(list(EXTRACTORS))"
+```powershell
+$env:SECRETS_ENDPOINT = "http://localhost:4567"
+$env:RDS_HOST_OVERRIDE = "localhost"
+$env:RDS_PORT_OVERRIDE = "15432"
+$env:ERP_SECRET = "dw/erp"
+python -c "from etl.pipelines import run_erp_to_bronce; print(run_erp_to_bronce())"
 ```

@@ -1,0 +1,21 @@
+﻿{
+  "mode": "stand-in",
+  "notes": "LocalStack Hobby/Community: servicio EFS no incluido en la licencia. El lab usa ecs/efs-standin/ como EFS (DAGs+logs). En AWS real: create-file-system + access points + mount targets en subnets Role=ecs-lambda-efs con sg-efs.",
+  "stand_in": {
+    "dags_path": "ecs/efs-standin/dags",
+    "logs_path": "ecs/efs-standin/logs",
+    "dag_demo": "ecs/efs-standin/dags/etl_bronce_origen_demo.py"
+  },
+  "aws_to_be": {
+    "file_system_name": "tp-airflow-efs",
+    "access_point_dags_path": "/airflow/dags",
+    "access_point_logs_path": "/airflow/logs",
+    "mount_subnets_tag": "Role=ecs-lambda-efs",
+    "security_group": "sg-efs"
+  },
+  "resolved_network": {
+    "sg_efs": "sg-c66c95ead8e7700a9",
+    "subnet_compute_a": "subnet-aafbeecf2522b9599",
+    "subnet_compute_b": "subnet-dea6990d018918795"
+  }
+}

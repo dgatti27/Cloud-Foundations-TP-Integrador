@@ -21,16 +21,22 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres-dw:5432/gold
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      # Paquete etl/ montado en /opt/airflow/packages/etl (lab-extra + 09b)
+      PYTHONPATH: /opt/airflow/packages
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       AWS_DEFAULT_REGION: us-east-1
       SECRETS_ENDPOINT: http://ministack-integrador:4566
       RDS_HOST_OVERRIDE: host.docker.internal
       RDS_PORT_OVERRIDE: "15432"
+      RDS_ETL_SECRET: dw/rds-etl
+      # Lab 09b demo origen; lab-extra usa dw/erp (ERP_SECRET)
       ORIGEN_SECRET: dw/origen-demo
+      ERP_SECRET: dw/erp
     volumes:
       - ./efs-standin/dags:/opt/airflow/dags
       - ./efs-standin/logs:/opt/airflow/logs
+      - ../etl:/opt/airflow/packages/etl
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -45,6 +51,7 @@ services:
     volumes:
       - ./efs-standin/dags:/opt/airflow/dags
       - ./efs-standin/logs:/opt/airflow/logs
+      - ../etl:/opt/airflow/packages/etl
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -57,6 +64,7 @@ services:
     volumes:
       - ./efs-standin/dags:/opt/airflow/dags
       - ./efs-standin/logs:/opt/airflow/logs
+      - ../etl:/opt/airflow/packages/etl
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

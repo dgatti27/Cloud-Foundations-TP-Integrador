@@ -1,29 +1,22 @@
 {
-  "vpc_id": "vpc-98fea469ae55148a4",
+  "vpc_id": "vpc-fa4649da7d40b4ee6",
   "region": "us-east-1",
   "subnets": {
-    "public_a": "subnet-9102bda8298b8ae6e",
-    "public_b": "subnet-4ea42c7ff4165b7b1",
-    "rds_a": "subnet-254363357356c5e93",
-    "rds_b": "subnet-6dffc44fe27b6788d",
-    "compute_a": "subnet-805d156f01430d344",
-    "compute_b": "subnet-888a0d85a005ebf7d"
+    "public_a": "subnet-f28978316e1bdf6eb",
+    "public_b": "subnet-47dbb0ae02d626424",
+    "rds_a": "subnet-cc3921093cd7227f8",
+    "rds_b": "subnet-92a4459d457bd7d15",
+    "compute_a": "subnet-aafbeecf2522b9599",
+    "compute_b": "subnet-dea6990d018918795"
   },
-  "route_tables": {
-    "public": "rtb-a8defb66730417e40",
-    "rds": "rtb-4b025a5926b9cbac0",
-    "compute": "rtb-569577db3777bf901"
-  },
-  "igw": "igw-63b7ac4d474ae9630",
-  "nat": "nat-5d7f9b76c724df6b6",
-  "eip_alloc": "eipalloc-391f669ae9ad5287d",
   "security_groups": {
-    "alb": "sg-38aa479f0dcf2fdee",
-    "api": "sg-bda870f92b2d6c926",
-    "ecs_etl": "sg-36fc8213ef14bca95",
-    "rds": "sg-e8161fbc482b0ab67",
-    "efs": "sg-fcdeaba5b39e87b45"
+    "alb": "sg-cbd9e224a7de388ad",
+    "api": "sg-58618edbaec75a1dc",
+    "ecs_etl": "sg-d27a4df8a74aa9f69",
+    "rds": "sg-fb8dc6e3dd89e41a7",
+    "efs": "sg-c66c95ead8e7700a9"
   },
-  "endpoint_s3": "vpce-d16320f89dee7e751",
-  "notes": "Endpoint S3 modela AWS to-be; lake = MinIO. PERSISTENCE=1 activo; no usar --force-recreate salvo necesidad."
+  "nat": "nat-6eb1bf2b195ef9f69",
+  "endpoint_s3": "vpce-f0ae86039295bbe8c",
+  "notes": "Reprovisionado 2026-08-02 tras recreate LocalStack. EFS/ECS API = Pro; lab 09b usa stand-in."
 }

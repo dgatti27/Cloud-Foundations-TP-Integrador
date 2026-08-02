@@ -1,614 +1,317 @@
-# Lab 09b TP — ECS Fargate + EFS: Airflow ETL → Bronce (RDS)
+# Lab 09b TP — Airflow ETL → Bronce (stand-in Fargate + EFS)
 
-Implementa en el lab la capa de **cómputo** del to-be documentado en:
+<!--
+  Este lab materializa la CAPA DE CÓMPUTO del to-be (Airflow en Fargate + EFS)
+  sobre LocalStack Hobby, donde las APIs ecs/efs NO existen.
 
-| Documento | Qué fija para este lab |
+  Lectura recomendada:
+    1) Este archivo (qué / por qué de cada paso)
+    2) ecs/ecs_demo.py   → automatiza pasos 0–4 con los mismos comentarios
+    3) ecs/IAM-NOTES.md  → detalle execution role vs task role
+    4) docs/Infraestructure_Architecture.md + docs/Solution_Architecture.md §4–5
+
+  Atajo reproducible:
+    python ecs/ecs_demo.py
+-->
+
+## Qué implementa (y qué NO)
+
+Implementa en **LocalStack Hobby** la capa de cómputo del to-be de:
+
+| Documento | Qué fija |
 |---|---|
-| [`docs/Infraestructure_Architecture.md`](../docs/Infraestructure_Architecture.md) | 3 capas VPC; app privada = **ECS Fargate (Airflow scheduler/webserver/worker) + EFS**; datos = RDS Multi-AZ |
-| [`docs/Solution_Architecture.md`](../docs/Solution_Architecture.md) §4–5 | Flujo ETL grupo 1 → **Bronce**; Fargate vs EC2/MWAA; EFS para DAGs/logs; NAT solo hacia orígenes; Secrets + IAM |
+| [`docs/Infraestructure_Architecture.md`](../docs/Infraestructure_Architecture.md) | App privada = Airflow (scheduler/webserver/worker) + storage compartido DAGs/logs; datos = RDS |
+| [`docs/Solution_Architecture.md`](../docs/Solution_Architecture.md) §4–5 | ETL grupo 1 → **Bronce**; EFS para DAGs/logs; NAT a orígenes; Secrets + IAM |
 
-Cierra el arco operativo: **IAM (04) → VPC (07-v2) → RDS (08-tp) → cómputo ETL (hoy)** — fase **F3/F5** del plan en Solution Architecture.
+> **Alcance Hobby (este lab)**  
+> LocalStack Hobby incluye IAM, EC2/VPC, logs, etc. **No** incluye `ecs` ni `efs` (licencia Pro).  
+> Por eso **no** hay pasos `create-cluster` / `register-task-definition` / `create-file-system`.  
+>
+> | To-be AWS (`docs/`) | Hobby (este lab) | Por qué esa equivalencia |
+> |---|---|---|
+> | ECS Fargate (Airflow) | `docker-compose.airflow.yaml` | Misma imagen/proceso; sin API ECS |
+> | EFS (DAGs + logs) | `ecs/efs-standin/` montado en el compose | Mismo contrato: árbol compartido entre procesos |
+> | Task role / execution role | Roles IAM en LocalStack | Documentan privilegio mínimo; Compose usa keys `test` |
+> | RDS Bronce | MiniStack `tp-dw-db` + secret `dw/rds-etl` | Ya provisionado en lab 08-tp |
+>
+> En AWS / Learner Lab se materializa Fargate + EFS reales con el **mismo** diseño de VPC/IAM.
 
-### Mapeo docs → lab (nombres)
+Cierra el arco: **IAM (04) → VPC (07-v2) → RDS (08-tp) → cómputo ETL (hoy)**.
 
-| To-be (`docs/`) | En el TP local (labs 07–08) |
-|---|---|
-| Base **Bronce** + **DW** en una RDS Multi-AZ | Misma instancia `tp-dw-db`, schemas **`bronce`** + **`gold`** |
-| Airflow dockerizado → ECS Fargate + EFS | Task defs / service (API) + compose stand-in |
-| Conexión a orígenes **por host** (no API) | Secrets `dw/origen-*` + egress NAT (`RT_COMPUTE`) |
-| Staging S3 | MinIO `staging-data-lake` (decisión 002) |
-| Credencial ETL | Secret MiniStack `dw/rds-etl` → user `etl_writer` |
+### Mapeo docs → lab
+
+| To-be (`docs/`) | TP local | Nota |
+|---|---|---|
+| Bronce + DW en RDS Multi-AZ | `tp-dw-db`, schemas `bronce` + `gold` | Datos viven en Postgres, no en EFS |
+| Airflow → Fargate + EFS | Compose Airflow + `efs-standin` | Stand-in pedagógico |
+| Orígenes por host | Secret `dw/origen-demo` + `postgres-bronce` | Un secret por origen (patrón to-be) |
+| Staging S3 | MinIO (decisión 002) | Opcional en este lab |
+| Credencial ETL | `dw/rds-etl` → `etl_writer` | Solo escribe bronce/gold; no es master |
 
 ```text
-Orígenes (ERP FoxPro / Ecommerce Mongo / Eventos Mongo / scraping)
-        │  conexión directa por host (docs §4.2)
-        │  egress vía NAT Gateway — lab 07-v2 (RT_COMPUTE)
+Origen demo (postgres-bronce)
+        │
         ▼
-┌─ Subred privada APP (docs: sin EC2) ─────────────────────────────┐
-│  ECS Fargate: Airflow scheduler + webserver + worker             │
-│  SG: sg-ecs-etl                                                  │
-│       ├── NFS :2049 ──► EFS (sg-efs)  DAGs + logs compartidos    │
-│       └── :5432 ─────► RDS (sg-rds)  schema bronce / etl_writer  │
-└──────────────────────────────────────────────────────────────────┘
+┌─ Stand-in app (≈ Fargate + EFS) ─────────────────────────┐
+│  Docker: Airflow webserver + scheduler                   │
+│  Volumen efs-standin → /opt/airflow/dags + logs          │
+│       └── :15432 ──► MiniStack RDS  schema bronce        │
+└──────────────────────────────────────────────────────────┘
         ▲
-        │ Task role = app-role (trust ecs-tasks.amazonaws.com)
-        │ Secrets Manager: dw/rds-etl + dw/<origen>
+        │ IAM modelo: app-role + ecsTaskExecutionRole (LocalStack)
+        │ Secrets: dw/rds-etl + dw/origen-demo (MiniStack :4567)
 ```
-
-> **LocalStack Community vs ejecución real**  
-> LocalStack (`:4566`) modela IAM + VPC/SG y, si habilitás los servicios, la **API** de ECS/EFS.  
-> **No** corre Fargate real ni monta NFS (limitación alineada a Solution Architecture: orquestación real en AWS).  
-> Para **ejecutar** el ETL hoy: stand-in Docker (Airflow + volumen = EFS) → MiniStack RDS (`:4567`).  
-> En AWS / Learner Lab: mismo diseño de `docs/`, Fargate + EFS mount targets reales.
 
 ---
 
-## Por qué este lab (trazabilidad a `docs/`)
+## Por qué este lab
 
-| Pieza to-be | Fuente en docs | Qué armamos hoy |
-|---|---|---|
-| Airflow en ECS Fargate (sin EC2) | Infra §to-be; Solution §5.2 | Cluster + task definitions + service + compose |
-| EFS solo DAGs/logs (no el DW) | Solution §5.2, costos EFS 10 GB | FS + mount targets / volumen `efs-standin` |
-| ETL grupo 1 → Bronce | Infra flujo; Solution §4.2 | DAG → `bronce.ingest_batch` / `raw_record` |
-| NAT solo hacia orígenes | Solution §5.4 | Reuso `tp-nat-etl` + `RT_COMPUTE` (07-v2) |
-| IAM mínimo + Secrets | Infra transversal; Solution §4.1 | Extiende `app-role` + `ecsTaskExecutionRole` |
-| RDS :5432 solo desde capa app | Solution §4.2 | Ya cableado: `sg-ecs-etl` → `sg-rds` |
+| Pieza to-be | Fuente | Qué hacemos en Hobby | Por qué importa |
+|---|---|---|---|
+| Roles Fargate (execution + task) | Solution §4.1 | Paso 1 — IAM en LocalStack | Separar boot vs runtime (least privilege) |
+| EFS DAGs/logs | Solution §5.2 | Paso 2 — carpeta `efs-standin` | Varias tasks ven el mismo DAG/código |
+| Airflow orquesta ETL grupo 1 | Infra flujo | Paso 3 — compose + DAG → `bronce` | Demuestra el camino de datos real |
+| SG / NAT / subnets | Lab 07-v2 | Ya existen | En AWS el compose se “mueve” a esas subnets |
+
+---
+
+## Cómo ejecutarlo
+
+### Opción A — Script (recomendado)
+
+```powershell
+# Prereqs: docker compose base up + labs 04, 07-v2, 08-tp
+$env:AWS_ACCESS_KEY_ID = "test"
+$env:AWS_SECRET_ACCESS_KEY = "test"
+$env:AWS_DEFAULT_REGION = "us-east-1"
+$env:PYTHONIOENCODING = "utf-8"
+
+python ecs/ecs_demo.py
+# Flags útiles:
+#   python ecs/ecs_demo.py --skip-runtime   # solo IAM + secret + dirs
+#   python ecs/ecs_demo.py --cleanup        # apaga Airflow al final
+```
+
+`ecs_demo.py` hace los pasos 0–4 con comentarios inline (qué / por qué). Preferilo a copiar/pegar PowerShell: evita el bug de JSON con comillas en Windows.
+
+### Opción B — Manual (abajo)
+
+Los bloques PowerShell sirven para entender cada API; el resultado esperado es el mismo que el script.
 
 ---
 
 ## Prerequisitos
 
 ```powershell
-# Emuladores
-docker compose up -d localstack-integrador ministack-integrador s3-soporte redis
+docker compose up -d localstack-integrador ministack-integrador s3-soporte redis postgres-bronce postgres-dw
 
 $env:AWS_ACCESS_KEY_ID = "test"
 $env:AWS_SECRET_ACCESS_KEY = "test"
 $env:AWS_DEFAULT_REGION = "us-east-1"
+$env:PYTHONIOENCODING = "utf-8"
 
-# Lab 04 — app-role con trust ECS
-awslocal iam get-role --role-name app-role --query "Role.Arn"
+# Lab 04 — task role base (app-role). Sin esto el Paso 1.2 no tiene dónde colgar InlineEtlSecrets.
+awslocal iam get-role --role-name app-role --query "Role.Arn" --output text
+# Si falta: python iam/iam_demo.py
 
-# Lab 07-v2 — VPC + SGs (entrecomillar filtros en PowerShell)
+# Lab 07-v2 — VPC + SGs del diseño. Filtros entrecomillados: PowerShell parte mal los Values= si no.
 awslocal ec2 describe-vpcs --filters "Name=tag:Name,Values=tp-integrador-vpc" --query "Vpcs[0].VpcId" --output text
 awslocal ec2 describe-security-groups --filters "Name=group-name,Values=sg-ecs-etl" --query "SecurityGroups[0].GroupId" --output text
 awslocal ec2 describe-security-groups --filters "Name=group-name,Values=sg-efs" --query "SecurityGroups[0].GroupId" --output text
-awslocal ec2 describe-subnets --filters "Name=tag:Role,Values=ecs-lambda-efs" --query "Subnets[].{Id:SubnetId,Cidr:CidrBlock,AZ:AvailabilityZone}" --output table
 
-# Lab 08-tp — RDS + secret ETL
+# Lab 08-tp — RDS + secret ETL. El DAG escribe con etl_writer (dw/rds-etl), no con master.
 curl.exe -s http://localhost:4567/_ministack/health
-aws --endpoint-url http://localhost:4567 secretsmanager get-secret-value --secret-id dw/rds-etl --query "Name" --output text
+# Solo Name (no imprimas SecretString en demos / logs compartidos)
+aws --endpoint-url http://localhost:4567 secretsmanager describe-secret --secret-id dw/rds-etl --query "Name" --output text
 ```
 
-Variables de sesión (rellenar con los IDs de tu entorno):
+### Endpoints (no mezclar)
 
-```powershell
-$VPC_ID   = (awslocal ec2 describe-vpcs --filters "Name=tag:Name,Values=tp-integrador-vpc" --query "Vpcs[0].VpcId" --output text).Trim()
-$SG_ECS   = (awslocal ec2 describe-security-groups --filters "Name=group-name,Values=sg-ecs-etl" --query "SecurityGroups[0].GroupId" --output text).Trim()
-$SG_EFS   = (awslocal ec2 describe-security-groups --filters "Name=group-name,Values=sg-efs" --query "SecurityGroups[0].GroupId" --output text).Trim()
-$SUBNETS  = awslocal ec2 describe-subnets --filters "Name=tag:Role,Values=ecs-lambda-efs" --query "Subnets[].SubnetId" --output text
-$SUB_A, $SUB_B = ($SUBNETS -split "\s+")[0], ($SUBNETS -split "\s+")[1]
-$APP_ROLE = (awslocal iam get-role --role-name app-role --query "Role.Arn" --output text).Trim()
+| Servicio | URL | Uso | Error típico si mezclás |
+|---|---|---|---|
+| LocalStack | `:4566` | IAM + VPC | Buscar secrets aquí → no existen |
+| MiniStack | `:4567` | Secrets + RDS lógica | IAM aquí → no existe |
+| MinIO | `:9000` | Staging opcional | — |
+| postgres-bronce | `:5432` | Source demo | — |
+| RDS MiniStack (host) | `:15432` | Destino `bronce` | Usar el IP del secret sin override desde el host |
 
-Write-Host "VPC=$VPC_ID"
-Write-Host "SG_ECS=$SG_ECS  SG_EFS=$SG_EFS"
-Write-Host "SUB_A=$SUB_A  SUB_B=$SUB_B"
-Write-Host "APP_ROLE=$APP_ROLE"
-```
+> MiniStack publica `4567:4566`: **desde el host** Secrets = `:4567`; **entre contenedores** = `ministack-integrador:4566` (así está `SECRETS_ENDPOINT` en el compose).
 
 ---
 
-## Mapa de endpoints (no mezclar)
+## Paso 1 — IAM: execution role + task role (Hobby ✅)
 
-| Servicio | URL | Uso en este lab |
-|---|---|---|
-| LocalStack | `http://localhost:4566` | IAM, EC2/VPC, (API) ECS/EFS/Logs |
-| MiniStack | `http://localhost:4567` | Secrets `dw/rds-etl`, endpoint lógico RDS |
-| MinIO | `http://localhost:9000` | Staging opcional (`staging-data-lake`) |
-| Postgres origen (compose) | `localhost:5432` (`postgres-bronce`) | **Source** de demo (simula ERP/origen) |
-| RDS TP (MiniStack container) | puerto host `15432` o IP docker | Destino **bronce** |
+<!--
+  En Fargate hay SIEMPRE dos roles. Mezclarlos es el error más común:
+  - Execution = lo que necesita el agente ECS antes/durante el arranque.
+  - Task     = lo que necesita TU código (Airflow/DAG) ya corriendo.
+  Detalle ampliado: IAM-NOTES.md
+-->
 
----
+En Fargate hay **dos** roles. Los creamos en LocalStack aunque el runtime sea Docker: documentan el privilegio mínimo del to-be.
 
-## Paso 1 — Ampliar IAM para la task de Airflow/ETL
+```text
+Agente (boot) → ecsTaskExecutionRole   |  Contenedor (ETL) → app-role
+  pull imagen, awslogs                   |    Secrets ETL/orígenes, S3 staging
+```
 
-El lab 04 ya dejó `app-role` con **trust** `ecs-tasks.amazonaws.com` y policy S3.  
-Para el ETL necesitamos además: leer Secrets, escribir logs, y (en AWS) describir EFS.
+Detalle: [`IAM-NOTES.md`](./IAM-NOTES.md). Automatizado en `ecs_demo.py` → `step_iam()`.
 
-### 1.1 Execution role (pull imagen + logs)
-
-En Fargate hay **dos** roles:
-
-| Rol | Quién lo usa | Para qué |
-|---|---|---|
-| **Execution role** | agente ECS | pull ECR, escribir CloudWatch Logs, montar secrets en env |
-| **Task role** (`app-role`) | el proceso (Airflow/ETL) | Secrets Manager, S3 staging, connect a RDS vía secret |
+### 1.1 Execution role
 
 ```powershell
-# Trust compartido ECS (mismo del lab 04)
-@'
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Principal": { "Service": "ecs-tasks.amazonaws.com" },
-    "Action": "sts:AssumeRole"
-  }]
-}
-'@ | Set-Content -Path ecs\trust_ecs.json -Encoding utf8
-
+# Quién: agente ECS al arrancar (modelo AWS). En Hobby solo queda el rol creado.
+# Trust: solo ecs-tasks.amazonaws.com puede AssumeRole (trust_ecs.json).
 awslocal iam create-role `
   --role-name ecsTaskExecutionRole `
   --assume-role-policy-document file://ecs/trust_ecs.json 2>$null
 
-@'
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "Logs",
-      "Effect": "Allow",
-      "Action": ["logs:CreateLogStream", "logs:PutLogEvents", "logs:CreateLogGroup"],
-      "Resource": "*"
-    },
-    {
-      "Sid": "ECRPull",
-      "Effect": "Allow",
-      "Action": [
-        "ecr:GetAuthorizationToken",
-        "ecr:BatchCheckLayerAvailability",
-        "ecr:GetDownloadUrlForLayer",
-        "ecr:BatchGetImage"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-'@ | Set-Content -Path ecs\execution_policy.json -Encoding utf8
-
+# Policy: ECR pull + CloudWatch Logs. NO incluye Secrets ni S3 de negocio.
 awslocal iam put-role-policy `
   --role-name ecsTaskExecutionRole `
   --policy-name InlineEcsExecution `
   --policy-document file://ecs/execution_policy.json
 
-$EXEC_ROLE = (awslocal iam get-role --role-name ecsTaskExecutionRole --query "Role.Arn" --output text).Trim()
-Write-Host "EXEC_ROLE=$EXEC_ROLE"
+awslocal iam get-role --role-name ecsTaskExecutionRole --query "Role.Arn" --output text
 ```
 
-### 1.2 Task role — Secrets ETL + (opcional) staging MinIO
-
-`app-role` ya puede S3. Agregamos lectura del secret de RDS (y placeholders de orígenes):
+### 1.2 Task role — Secrets en `app-role`
 
 ```powershell
-@'
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "ReadEtlSecrets",
-      "Effect": "Allow",
-      "Action": ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
-      "Resource": [
-        "arn:aws:secretsmanager:*:*:secret:dw/rds-etl*",
-        "arn:aws:secretsmanager:*:*:secret:dw/erp*",
-        "arn:aws:secretsmanager:*:*:secret:dw/ecommerce*",
-        "arn:aws:secretsmanager:*:*:secret:dw/eventos*",
-        "arn:aws:secretsmanager:*:*:secret:dw/scraping*"
-      ]
-    },
-    {
-      "Sid": "CloudWatchMetrics",
-      "Effect": "Allow",
-      "Action": ["cloudwatch:PutMetricData"],
-      "Resource": "*"
-    }
-  ]
-}
-'@ | Set-Content -Path ecs\task_secrets_policy.json -Encoding utf8
-
+# Quién: código Airflow/DAG. Amplía app-role (lab 04) sin tocar master/api.
+# InlineEtlSecrets permite GetSecretValue solo sobre dw/rds-etl* y dw/origen* …
 awslocal iam put-role-policy `
   --role-name app-role `
   --policy-name InlineEtlSecrets `
   --policy-document file://ecs/task_secrets_policy.json
 
 awslocal iam list-role-policies --role-name app-role
+# Esperado: InlineS3Read + InlineEtlSecrets
 ```
 
-> En local, MiniStack (`:4567`) guarda `dw/rds-etl`. LocalStack IAM **autoriza el modelo**; la lectura real del secret en el stand-in Docker usa `AWS_ENDPOINT_URL=http://ministack-integrador:4566` (red compose) o el host `localhost:4567`.
-
----
-
-## Paso 2 — EFS (DAGs + logs)
-
-En AWS real: un file system Multi-AZ, mount targets en **ambas** subnets compute, SG `sg-efs` (2049 solo desde `sg-ecs-etl`).
-
-### 2.1 Crear file system + mount targets (API LocalStack / AWS)
-
-Primero habilitá `efs` (y `ecs`) en LocalStack si querés practicar la API. En `compose.yaml`:
-
-```yaml
-# SERVICES: ...,iam,ec2,ecs,efs,secretsmanager,logs,cloudwatch
-```
-
-Luego recreá solo LocalStack **sin** `-v` (para no borrar VPC):
-
-```powershell
-docker compose up -d localstack-integrador
-```
-
-```powershell
-# Crear EFS
-$FS_ID = (awslocal efs create-file-system `
-  --performance-mode generalPurpose `
-  --throughput-mode bursting `
-  --tags Key=Name,Value=tp-airflow-efs Key=Lab,Value=09b-tp `
-  --query "FileSystemId" --output text).Trim()
-Write-Host "FS_ID=$FS_ID"
-
-# Access point para DAGs (uid/gid de airflow = 50000 en imagen oficial)
-$AP_DAGS = (awslocal efs create-access-point `
-  --file-system-id $FS_ID `
-  --posix-user Uid=50000,Gid=0 `
-  --root-directory "Path=/airflow/dags,CreationInfo={OwnerUid=50000,OwnerGid=0,Permissions=775}" `
-  --tags Key=Name,Value=ap-airflow-dags `
-  --query "AccessPointId" --output text).Trim()
-
-$AP_LOGS = (awslocal efs create-access-point `
-  --file-system-id $FS_ID `
-  --posix-user Uid=50000,Gid=0 `
-  --root-directory "Path=/airflow/logs,CreationInfo={OwnerUid=50000,OwnerGid=0,Permissions=775}" `
-  --tags Key=Name,Value=ap-airflow-logs `
-  --query "AccessPointId" --output text).Trim()
-
-# Mount targets en las dos AZ de compute
-awslocal efs create-mount-target --file-system-id $FS_ID --subnet-id $SUB_A --security-groups $SG_EFS
-awslocal efs create-mount-target --file-system-id $FS_ID --subnet-id $SUB_B --security-groups $SG_EFS
-
-awslocal efs describe-file-systems --file-system-id $FS_ID
-awslocal efs describe-mount-targets --file-system-id $FS_ID
-```
-
-### Qué modela
-
-| Path EFS | Contenido | Quién escribe |
+| | 1.1 Execution | 1.2 Task (`app-role`) |
 |---|---|---|
-| `/airflow/dags` | DAGs Python (versionados en git → sync) | CI / deploy |
-| `/airflow/logs` | Task logs de Airflow | workers Fargate |
+| Momento (AWS) | Boot de la task | Runtime del ETL |
+| ECR / awslogs | Sí | No |
+| `dw/rds-etl` / orígenes | No | Sí |
+| S3 staging | No | Sí (lab 04) |
 
-**No** va el data warehouse en EFS: los datos van a **RDS `bronce` / `gold`**. EFS es solo orquestación.
+> El compose del Paso 3 **no asume** estos roles (LocalStack no inyecta credenciales en Docker). Usa `AWS_ACCESS_KEY_ID=test` contra MiniStack. Los roles quedan como **modelo IAM** alineado a `docs/`.
 
-### Stand-in local (si la API EFS no responde en Community)
+---
+
+## Paso 2 — “EFS” local: DAGs + logs compartidos (Hobby ✅)
+
+<!--
+  En AWS, varias tasks Fargate montan el mismo EFS vía access points
+  (/airflow/dags, /airflow/logs). Sin eso, cada task tendría su propio
+  filesystem efímero y no compartirían DAGs ni logs.
+  Hobby: un directorio del repo bind-mounted en todos los servicios Airflow.
+-->
+
+En AWS, EFS comparte DAGs/logs entre tasks Fargate. En Hobby usamos un directorio montado en todos los contenedores Airflow.
+
+**Access point (concepto to-be):** puerta a un subpath del EFS (`/airflow/dags` o `/airflow/logs`) con uid del user `airflow`. Aquí: subcarpetas de `efs-standin`.
 
 ```powershell
+# SG del diseño 07-v2 (existe aunque no haya NFS). En AWS abriría :2049 desde sg-ecs-etl.
+awslocal ec2 describe-security-groups --filters "Name=group-name,Values=sg-efs" `
+  --query "SecurityGroups[0].{Id:GroupId,Name:GroupName}" --output table
+
 New-Item -ItemType Directory -Force -Path ecs\efs-standin\dags, ecs\efs-standin\logs | Out-Null
-# Este directorio = EFS en el compose del Paso 5
+Get-ChildItem ecs\efs-standin\dags
+# Esperado: etl_bronce_origen_demo.py
+
+# Inventario stand-in vs to-be (mode=stand-in)
+Get-Content ecs\efs_config.json
 ```
+
+| AWS (to-be) | Hobby |
+|---|---|
+| EFS + access points | `ecs/efs-standin/{dags,logs}` |
+| Mount en Fargate | Bind mounts del compose |
+| `sg-efs` :2049 | Documentado; runtime = red Docker |
+
+**EFS/stand-in no guarda el DW** — solo orquestación. Datos → RDS `bronce`.
+
+Automatizado en `ecs_demo.py` → `step_efs_standin()`.
 
 ---
 
-## Paso 3 — Cluster ECS + log group
+## Paso 3 — Airflow + ETL grupo 1 → `bronce` (Hobby ✅)
+
+Runtime ejecutable: Compose ≈ Fargate; volumen ≈ EFS.
+
+### 3.1 Secret de origen (MiniStack)
+
+<!--
+  Patrón to-be: un secret por origen (dw/erp, dw/ecommerce, …).
+  app-role solo puede leer esos ARNs (task_secrets_policy.json).
+  El DAG no hardcodea host/password: los lee de Secrets Manager.
+-->
+
+**Preferí el script** (`step_origen_secret`): en PowerShell, `ConvertTo-Json` + CLI suele guardar JSON **sin comillas dobles** y el DAG muere con `JSONDecodeError`.
+
+Si lo hacés a mano, usá un archivo UTF-8 **sin BOM**:
 
 ```powershell
-awslocal ecs create-cluster --cluster-name tp-airflow `
-  --tags key=Name,value=tp-airflow key=Lab,value=09b-tp
-
-awslocal logs create-log-group --log-group-name /ecs/tp-airflow 2>$null
-
-awslocal ecs describe-clusters --clusters tp-airflow `
-  --query "clusters[0].{Name:clusterName,Status:status}" --output table
-```
-
----
-
-## Paso 4 — Task definition (Airflow worker / one-shot ETL)
-
-En producción: 3 services (webserver, scheduler, worker) con la misma imagen Airflow y mounts EFS.  
-En el lab: una **task definition** de worker/ETL que:
-
-1. Monta EFS (dags + logs)  
-2. Usa `app-role` como taskRoleArn  
-3. Lee `dw/rds-etl` y escribe en `bronce`
-
-```powershell
-# ARNs (LocalStack account 000000000000)
-$TASK_ROLE = $APP_ROLE
-# Imagen oficial Airflow — en AWS real irá a ECR tras docker push
-$IMAGE = "apache/airflow:2.9.3-python3.12"
-
-@'
-{
-  "family": "tp-airflow-worker",
-  "networkMode": "awsvpc",
-  "requiresCompatibilities": ["FARGATE"],
-  "cpu": "512",
-  "memory": "1024",
-  "executionRoleArn": "EXEC_ROLE_PLACEHOLDER",
-  "taskRoleArn": "TASK_ROLE_PLACEHOLDER",
-  "containerDefinitions": [
-    {
-      "name": "airflow-worker",
-      "image": "IMAGE_PLACEHOLDER",
-      "essential": true,
-      "command": ["celery", "worker"],
-      "environment": [
-        { "name": "AIRFLOW__CORE__LOAD_EXAMPLES", "value": "false" },
-        { "name": "AIRFLOW__CORE__EXECUTOR", "value": "CeleryExecutor" },
-        { "name": "USE_SECRETS_MANAGER", "value": "1" },
-        { "name": "AWS_DEFAULT_REGION", "value": "us-east-1" }
-      ],
-      "secrets": [],
-      "mountPoints": [
-        { "sourceVolume": "dags", "containerPath": "/opt/airflow/dags", "readOnly": false },
-        { "sourceVolume": "logs", "containerPath": "/opt/airflow/logs", "readOnly": false }
-      ],
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-group": "/ecs/tp-airflow",
-          "awslogs-region": "us-east-1",
-          "awslogs-stream-prefix": "worker"
-        }
-      }
-    }
-  ],
-  "volumes": [
-    {
-      "name": "dags",
-      "efsVolumeConfiguration": {
-        "fileSystemId": "FS_ID_PLACEHOLDER",
-        "transitEncryption": "ENABLED",
-        "authorizationConfig": { "accessPointId": "AP_DAGS_PLACEHOLDER", "iam": "ENABLED" }
-      }
-    },
-    {
-      "name": "logs",
-      "efsVolumeConfiguration": {
-        "fileSystemId": "FS_ID_PLACEHOLDER",
-        "transitEncryption": "ENABLED",
-        "authorizationConfig": { "accessPointId": "AP_LOGS_PLACEHOLDER", "iam": "ENABLED" }
-      }
-    }
-  ]
-}
-'@ | ForEach-Object {
-  $_ -replace "EXEC_ROLE_PLACEHOLDER", $EXEC_ROLE `
-     -replace "TASK_ROLE_PLACEHOLDER", $TASK_ROLE `
-     -replace "IMAGE_PLACEHOLDER", $IMAGE `
-     -replace "FS_ID_PLACEHOLDER", $FS_ID `
-     -replace "AP_DAGS_PLACEHOLDER", $AP_DAGS `
-     -replace "AP_LOGS_PLACEHOLDER", $AP_LOGS
-} | Set-Content -Path ecs\taskdef-airflow-worker.json -Encoding utf8
-
-awslocal ecs register-task-definition --cli-input-json file://ecs/taskdef-airflow-worker.json
-
-awslocal ecs describe-task-definition --task-definition tp-airflow-worker `
-  --query "taskDefinition.{Family:family,Cpu:cpu,Memory:memory,Network:networkMode}" --output table
-```
-
-### Service Fargate (awsvpc + subnets privadas + sg-ecs-etl)
-
-```powershell
-awslocal ecs create-service `
-  --cluster tp-airflow `
-  --service-name airflow-worker `
-  --task-definition tp-airflow-worker `
-  --desired-count 1 `
-  --launch-type FARGATE `
-  --network-configuration "awsvpcConfiguration={subnets=[$SUB_A,$SUB_B],securityGroups=[$SG_ECS],assignPublicIp=DISABLED}"
-
-awslocal ecs describe-services --cluster tp-airflow --services airflow-worker `
-  --query "services[0].{Status:status,Desired:desiredCount,Running:runningCount}" --output table
-```
-
-`assignPublicIp=DISABLED` + subnets compute + NAT = patrón to-be (salida a orígenes sin exponer la task).
-
----
-
-## Paso 5 — Stand-in ejecutable: Airflow + “EFS” + escritura a `bronce`
-
-Como Community no corre Fargate, este paso **sí ejecuta** el flujo ETL grupo 1.
-
-### 5.1 Secret origen de demo + DSN hacia MiniStack
-
-Usamos `postgres-bronce` (`localhost:5432`) como **source** (simula un origen externo).  
-El destino es el schema `bronce` de MiniStack RDS.
-
-```powershell
-# Secret de origen (MiniStack) — demo
-$origen = @{
-  host = "postgres-bronce"
-  port = 5432
-  dbname = "bronce"
-  username = "postgres"
-  password = "postgres"
-  engine = "postgres"
-} | ConvertTo-Json -Compress
+# Escribí JSON válido a archivo (evita que PowerShell strippee comillas)
+$tmp = "$PWD\ecs\_origen_secret.json"
+[System.IO.File]::WriteAllText(
+  $tmp,
+  '{"host":"postgres-bronce","port":5432,"dbname":"bronce","username":"postgres","password":"postgres","engine":"postgres"}'
+)
 
 aws --endpoint-url http://localhost:4567 secretsmanager create-secret `
-  --name dw/origen-demo `
-  --secret-string $origen 2>$null
-
-# Verificar secret ETL (lab 08)
-aws --endpoint-url http://localhost:4567 secretsmanager get-secret-value `
-  --secret-id dw/rds-etl --query "SecretString" --output text
-```
-
-Anotá `host`/`password` de `dw/rds-etl`. El host MiniStack desde otra red Docker suele ser la IP del container `ministack-rds-*-instance-tp-dw-db` o el hostname publicado; desde el host: `localhost` puerto **15432**.
-
-```powershell
-docker ps --filter "name=ministack-rds" --format "{{.Names}} {{.Ports}}"
-# típico: 0.0.0.0:15432->5432/tcp
-```
-
-### 5.2 DAG de ejemplo (grupo 1 → bronce)
-
-Creá `ecs/efs-standin/dags/etl_bronce_origen_demo.py`:
-
-```python
-"""DAG ETL grupo 1: origen demo -> schema bronce (tp-dw-db)."""
-from __future__ import annotations
-
-import json
-import os
-from datetime import datetime
-
-import boto3
-import psycopg2
-from airflow import DAG
-from airflow.operators.python import PythonOperator
-
-
-def _sm(endpoint: str, name: str) -> dict:
-    c = boto3.client(
-        "secretsmanager",
-        endpoint_url=endpoint,
-        region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
-        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "test"),
-        aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "test"),
-    )
-    return json.loads(c.get_secret_value(SecretId=name)["SecretString"])
-
-
-def extract_and_load_bronce(**_):
-    sm_url = os.environ["SECRETS_ENDPOINT"]  # http://ministack-integrador:4566 en compose
-    origen = _sm(sm_url, os.environ.get("ORIGEN_SECRET", "dw/origen-demo"))
-    dest = _sm(sm_url, "dw/rds-etl")
-
-    # 1) EXTRACT desde origen
-    src = psycopg2.connect(
-        host=origen["host"],
-        port=int(origen.get("port", 5432)),
-        dbname=origen.get("dbname") or origen.get("database"),
-        user=origen["username"],
-        password=origen["password"],
-    )
-    with src.cursor() as cur:
-        cur.execute("SELECT current_database(), now()")
-        row = cur.fetchone()
-    src.close()
-    payload = {"source_db": row[0], "extracted_at": str(row[1]), "origen": "origen-demo"}
-
-    # 2) LOAD a bronce (RDS TP)
-    # Desde compose, host del secret puede ser IP docker; override opcional:
-    dest_host = os.environ.get("RDS_HOST_OVERRIDE", dest["host"])
-    dest_port = int(os.environ.get("RDS_PORT_OVERRIDE", dest.get("port", 5432)))
-
-    dst = psycopg2.connect(
-        host=dest_host,
-        port=dest_port,
-        dbname=dest["dbname"],
-        user=dest["username"],
-        password=dest["password"],
-    )
-    with dst.cursor() as cur:
-        cur.execute(
-            "INSERT INTO bronce.ingest_batch (origen, row_count, status) "
-            "VALUES (%s, %s, %s) RETURNING batch_id",
-            ("origen-demo", 1, "loaded"),
-        )
-        batch_id = cur.fetchone()[0]
-        cur.execute(
-            "INSERT INTO bronce.raw_record (batch_id, origen, payload) "
-            "VALUES (%s, %s, %s::jsonb)",
-            (batch_id, "origen-demo", json.dumps(payload)),
-        )
-    dst.commit()
-    dst.close()
-    print(f"OK bronce batch_id={batch_id}")
-
-
-with DAG(
-    dag_id="etl_bronce_origen_demo",
-    start_date=datetime(2026, 1, 1),
-    schedule=None,
-    catchup=False,
-    tags=["tp", "bronce", "grupo1"],
-) as dag:
-    PythonOperator(task_id="extract_load_bronce", python_callable=extract_and_load_bronce)
-```
-
-### 5.3 Compose stand-in (Airflow + volumen EFS)
-
-Archivo `ecs/docker-compose.airflow.yaml` (referencia):
-
-```yaml
-# Stand-in local del lab 09b-tp: Airflow ≈ ECS Fargate; volumen ≈ EFS
-services:
-  airflow-init:
-    image: apache/airflow:2.9.3-python3.12
-    entrypoint: /bin/bash
-    command:
-      - -c
-      - |
-        pip install --quiet psycopg2-binary boto3 &&
-        airflow db migrate &&
-        airflow users create --username admin --password admin --firstname A --lastname A --role Admin --email a@a.com || true
-    environment: &airflow_env
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres-dw:5432/gold
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
-      AWS_DEFAULT_REGION: us-east-1
-      SECRETS_ENDPOINT: http://ministack-integrador:4566
-      # Host/puerto alcanzables desde la red compose hacia el Postgres de MiniStack:
-      RDS_HOST_OVERRIDE: host.docker.internal
-      RDS_PORT_OVERRIDE: "15432"
-      ORIGEN_SECRET: dw/origen-demo
-    volumes:
-      - ./efs-standin/dags:/opt/airflow/dags
-      - ./efs-standin/logs:/opt/airflow/logs
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
-  airflow-webserver:
-    image: apache/airflow:2.9.3-python3.12
-    command: webserver
-    ports: ["8080:8080"]
-    environment: *airflow_env
-    volumes:
-      - ./efs-standin/dags:/opt/airflow/dags
-      - ./efs-standin/logs:/opt/airflow/logs
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on: [airflow-init]
-
-  airflow-scheduler:
-    image: apache/airflow:2.9.3-python3.12
-    command: scheduler
-    environment: *airflow_env
-    volumes:
-      - ./efs-standin/dags:/opt/airflow/dags
-      - ./efs-standin/logs:/opt/airflow/logs
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on: [airflow-init]
-```
-
-> Metadata DB de Airflow: reutilizamos `postgres-dw:5432` solo como **metastore** de Airflow (no confundir con schema `gold` del DW). En AWS real Airflow usa RDS/Aurora propio o el mismo patrón aislado.
-
-```powershell
-# Ajustar secret origen para que el host sea alcanzable desde Airflow
-$origen = @{
-  host = "postgres-bronce"
-  port = 5432
-  dbname = "bronce"
-  username = "postgres"
-  password = "postgres"
-  engine = "postgres"
-} | ConvertTo-Json -Compress
+  --name dw/origen-demo --secret-string "file://$tmp" 2>$null
 aws --endpoint-url http://localhost:4567 secretsmanager put-secret-value `
-  --secret-id dw/origen-demo --secret-string $origen
+  --secret-id dw/origen-demo --secret-string "file://$tmp"
+Remove-Item $tmp -Force
 
+# Verificar existencia (no imprimir SecretString)
+aws --endpoint-url http://localhost:4567 secretsmanager describe-secret `
+  --secret-id dw/origen-demo --query "Name" --output text
+aws --endpoint-url http://localhost:4567 secretsmanager describe-secret `
+  --secret-id dw/rds-etl --query "Name" --output text
+
+docker ps --filter "name=ministack-rds" --format "{{.Names}} {{.Ports}}"
+# Destino desde el host / compose: localhost:15432 (RDS_HOST_OVERRIDE)
+```
+
+### 3.2 DAG y compose (ya en el repo)
+
+| Archivo | Rol | Por qué |
+|---|---|---|
+| [`efs-standin/dags/etl_bronce_origen_demo.py`](./efs-standin/dags/etl_bronce_origen_demo.py) | EXTRACT origen → INSERT `bronce.*` | Mismo código que llevarías a Fargate |
+| [`docker-compose.airflow.yaml`](./docker-compose.airflow.yaml) | webserver + scheduler + mounts | Sustituto Hobby de ECS service |
+| [`ecs_demo.py`](./ecs_demo.py) | Orquesta pasos 0–4 | Reproducible; JSON seguro |
+
+El DAG: lee `dw/origen-demo` y `dw/rds-etl` en MiniStack → escribe `bronce.ingest_batch` / `bronce.raw_record`.
+
+### 3.3 Levantar Airflow
+
+```powershell
 cd ecs
 docker compose -f docker-compose.airflow.yaml up -d
-# UI: http://localhost:8080  (admin / admin)
+# UI http://localhost:8080  → admin / admin
+# Trigger DAG: etl_bronce_origen_demo
+#
+# O desde el script (espera parse + success):
+#   python ../ecs/ecs_demo.py
 ```
 
-En la UI: Trigger DAG `etl_bronce_origen_demo`.
+> Metastore Airflow: `postgres-dw` (DB `gold` del compose) — solo metadata de Airflow, **no** es el schema `gold` del DW en MiniStack.
 
-### 5.4 Verificar en RDS `bronce`
+Primera vez: Docker descarga `apache/airflow:2.9.3-python3.12` (puede tardar).
+
+Trigger CLI (equivalente a lo que hace `ecs_demo.py`):
+
+```powershell
+docker exec ecs-airflow-scheduler-1 airflow dags unpause etl_bronce_origen_demo
+docker exec ecs-airflow-scheduler-1 airflow dags trigger etl_bronce_origen_demo
+```
+
+### 3.4 Verificar `bronce`
 
 ```powershell
 $c = (docker ps --filter "name=ministack-rds" --format "{{.Names}}" | Select-Object -First 1)
@@ -616,123 +319,104 @@ docker exec -i $c psql -U dwadmin -d dw -c "SELECT * FROM bronce.ingest_batch OR
 docker exec -i $c psql -U dwadmin -d dw -c "SELECT id, batch_id, origen, payload FROM bronce.raw_record ORDER BY id DESC LIMIT 5;"
 ```
 
-Esperado: filas con `origen = origen-demo` y payload JSON.
+Esperado: filas con `origen = origen-demo`.
 
 ---
 
-## Paso 6 — Flujo end-to-end (qué debe quedar claro)
+## Paso 4 — Flujo end-to-end
+
+<!--
+  Este paso no crea recursos: consolida el relato del camino de datos
+  y las capas de control ya construidas en labs 04/07/08.
+-->
 
 ```text
-1. Airflow scheduler lee DAG desde EFS (/opt/airflow/dags)     ← lab hoy: volumen
-2. Worker asume identidad app-role (task role)                 ← lab 04 + Paso 1
-3. GetSecretValue dw/origen-demo  → connect SOURCE             ← NAT en AWS; red compose en lab
-4. extract + normalize (paquete etl/)                          ← código en etl/
-5. GetSecretValue dw/rds-etl      → connect RDS como etl_writer
-6. INSERT bronce.ingest_batch + bronce.raw_record              ← lab 08-tp GRANTs
-7. Logs de la task → EFS /opt/airflow/logs (+ CloudWatch)      ← sg-efs :2049
+1. Scheduler lee DAG desde efs-standin/dags          (≈ EFS)
+2. Task usa secrets MiniStack (modelo: app-role)
+3. Connect SOURCE (postgres-bronce)
+4. INSERT bronce.ingest_batch + bronce.raw_record    (etl_writer)
+5. Logs en efs-standin/logs                          (≈ EFS logs)
 ```
 
-**Capa de control (igual que lab 08):**
+Capas de control (lab 08): red SG → IAM secrets → GRANTs SQL (`api_reader` no ve `bronce`).
 
-1. **Red:** solo `sg-ecs-etl` llega a `sg-rds:5432` y a `sg-efs:2049`.  
-2. **IAM:** task role no es master; solo secrets ETL/orígenes.  
-3. **SQL:** `etl_writer` escribe bronce; `api_reader` no ve bronce.
+`ecs_demo.py` → `step_e2e_narrative()` imprime este checklist tras verificar.
 
 ---
 
-## Paso 7 — Documentar decisión
+## Paso 5 — Decisión (opcional)
 
-Agregá en [`docs/decisions.md`](../docs/decisions.md) (ADR del TP), alineado a Solution §5.2:
+En [`docs/decisions.md`](../docs/decisions.md):
 
 ```
-### 012 — Airflow en ECS Fargate + EFS (DAGs/logs); datos en RDS Bronce
+### 012 — Airflow (Fargate to-be) + EFS; datos en RDS Bronce
 
-Decision: orquestar ETL con Airflow sobre Fargate; persistir DAGs/logs en EFS;
-escribir crudos en Bronce (schema bronce de tp-dw-db) vía secret dw/rds-etl.
-Justificación: docs/Solution_Architecture.md §5.2 (vs EC2 / MWAA).
+Decision: orquestar ETL con Airflow; DAGs/logs en storage compartido (EFS en AWS;
+volumen en Hobby); crudos en schema bronce vía dw/rds-etl.
+Justificación: docs/Solution_Architecture.md §5.2.
 
-Contexto: to-be sin EC2 (Infraestructure_Architecture); NAT para orígenes;
-VPC lab 07-v2 ya define sg-ecs-etl / sg-efs / subnets compute.
-
-Alternativas: MWAA (managed), Airflow solo en EC2, Step Functions + Lambda.
-
-Tradeoff: Fargate + EFS tiene costo (~USD 48 + EFS en finops); EFS no
-reemplaza el DW. LocalStack modela API; ejecución del lab usa compose.
-
-Resultado: lab 09b-tp — IAM execution/task, EFS, ECS taskdef/service,
-DAG demo → bronce.
+Tradeoff: Hobby no tiene API ECS/EFS — lab 09b usa Docker stand-in.
+Resultado: IAM roles + compose Airflow + DAG → bronce.
 ```
 
 ---
 
-## Paso 8 — Cleanup
+## Paso 6 — Cleanup
 
 ```powershell
-# Stand-in
 cd ecs
 docker compose -f docker-compose.airflow.yaml down
-
-# API LocalStack (si creaste recursos)
-awslocal ecs update-service --cluster tp-airflow --service airflow-worker --desired-count 0
-awslocal ecs delete-service --cluster tp-airflow --service airflow-worker --force
-awslocal ecs delete-cluster --cluster tp-airflow
-# EFS: borrar mount targets → access points → file system (orden AWS)
+# No borres VPC ni RDS (labs 07/08)
+# Equivalente: python ecs/ecs_demo.py --cleanup  (si también corriste el demo)
 ```
-
-No borres la VPC ni RDS: siguen para el resto del TP.
 
 ---
 
 ## Checkpoint
 
-- [ ] `app-role` tiene policy de Secrets ETL; existe `ecsTaskExecutionRole`
-- [ ] EFS (API) o stand-in `ecs/efs-standin/{dags,logs}` listo
-- [ ] Cluster `tp-airflow` + task definition `tp-airflow-worker` (awsvpc, Fargate)
-- [ ] Service en subnets `Role=ecs-lambda-efs` + `sg-ecs-etl`, sin IP pública
-- [ ] DAG `etl_bronce_origen_demo` triggereado
-- [ ] Filas nuevas en `bronce.ingest_batch` / `bronce.raw_record`
-- [ ] Entendido: EFS = orquestación; RDS bronce = datos; NAT = salida a orígenes
+- [ ] `ecsTaskExecutionRole` + `app-role` con `InlineEtlSecrets`
+- [ ] `ecs/efs-standin/dags` con el DAG demo
+- [ ] Airflow UI en `:8080` y DAG triggereado (`python ecs/ecs_demo.py` o UI)
+- [ ] Filas en `bronce.ingest_batch` / `bronce.raw_record`
+- [ ] Claro: Hobby = stand-in; AWS = Fargate + EFS reales (`docs/`)
 
 ---
 
-## Para llevar: LocalStack vs AWS real
+## Hobby vs AWS real
 
-| Acción | LocalStack Community + stand-in | AWS real |
+| Acción | Hobby (este lab) | AWS real |
 |---|---|---|
-| IAM roles / policies ECS | ✅ | ✅ |
-| Subnets + SG (sg-ecs-etl, sg-efs) | ✅ (lab 07-v2) | ✅ |
-| EFS create + mount targets | ⚠️ API parcial / Pro | ✅ |
-| ECS RunTask / Service Fargate | ⚠️ API; sin ENI real | ✅ |
-| Montaje NFS EFS en la task | ❌ → volumen Docker | ✅ |
-| ETL escribe `bronce` | ✅ vía MiniStack + compose | ✅ |
-| Egress orígenes vía NAT | ⚠️ topología sí; paquetes limitados | ✅ |
-| Imagen en ECR | ⚠️ | ✅ |
+| IAM execution + task role | ✅ LocalStack | ✅ |
+| VPC / SG (`sg-ecs-etl`, `sg-efs`) | ✅ lab 07-v2 | ✅ |
+| EFS / ECS API | ❌ fuera de licencia | ✅ |
+| Airflow + DAGs/logs compartidos | ✅ Compose + `efs-standin` | ✅ Fargate + EFS |
+| ETL → `bronce` | ✅ MiniStack | ✅ RDS |
+| Automatización | ✅ `ecs/ecs_demo.py` | Task definition + CI |
 
 ---
 
-## Archivos de este lab
+## Archivos
 
 | Archivo | Rol |
 |---|---|
-| `ecs/lab-09b-tp.md` | Este documento |
-| `ecs/trust_ecs.json` | Trust `ecs-tasks.amazonaws.com` |
-| `ecs/execution_policy.json` | Execution role (logs/ECR) |
-| `ecs/task_secrets_policy.json` | Task role Secrets ETL |
-| `ecs/taskdef-airflow-worker.json` | Task definition Fargate (generada) |
-| `ecs/efs-standin/` | Volumen local ≈ EFS (dags/logs) |
-| `ecs/docker-compose.airflow.yaml` | Stand-in ejecutable Airflow |
-| `etl/` | Lógica extract/transform/load (importable desde DAGs) |
+| `lab-09b-tp.md` | Este lab (solo Hobby) — guía comentada |
+| `ecs_demo.py` | Script Python pasos 0–4 (recomendado) |
+| `IAM-NOTES.md` | Detalle roles 1.1 / 1.2 |
+| `trust_ecs.json`, `execution_policy.json`, `task_secrets_policy.json` | IAM |
+| `efs-standin/` | ≈ EFS |
+| `efs_config.json` | Inventario stand-in |
+| `docker-compose.airflow.yaml` | ≈ Fargate |
+| `etl/` | Lógica reutilizable por DAGs |
 
 ---
 
-## Relación con labs previos y `docs/`
+## Relación con labs / docs
 
-| Fuente | Aporte que reutilizamos |
+| Fuente | Aporte |
 |---|---|
-| `docs/Infraestructure_Architecture.md` | Capas VPC; Fargate+EFS; RDS Multi-AZ |
-| `docs/Solution_Architecture.md` §4–5 | Flujo grupo 1→Bronce; justificación Fargate; NAT/endpoints |
-| Lab 04 IAM | `app-role` + trust ECS + S3 staging |
-| Lab 06 MinIO | `staging-data-lake` |
-| Lab 07-v2 VPC | compute, NAT, `sg-ecs-etl`, `sg-efs`, `sg-rds` |
-| Lab 08-tp RDS | `tp-dw-db`, schema `bronce`, secret `dw/rds-etl` |
-| Lab 09 IaC | Declarar runtime; 09b declara cómputo ETL (F3 del Gantt) |
+| `docs/` Infra + Solution | To-be Fargate + EFS + flujo Bronce |
+| 04 IAM | `app-role` trust ECS |
+| 07-v2 VPC | SG / subnets / NAT (diseño) |
+| 08-tp RDS | `bronce` + `dw/rds-etl` |
+| 09 IaC | Declarar infra; 09b declara cómputo ETL ejecutable en Hobby |
+| `ecs_demo.py` | Ejecuta 09b de punta a punta en Hobby |

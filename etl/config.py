@@ -1,43 +1,101 @@
-"""Configuracion de conexiones del ETL.
+"""Configuración de conexiones del ETL (lab-extra + labs 08/09b).
 
-En AWS: las credenciales de cada origen y de RDS salen de Secrets Manager
-(dw/erp-foxpro, dw/ecommerce-mongo, dw/eventos-mongo, dw/scraping, dw/rds-dw).
-En local (Docker): se leen de variables de entorno (DW_CRUDA_CONN, DW_DW_CONN,
-y ORIGEN_*_CONN). Este modulo abstrae de donde vienen.
+Prioridad de credenciales
+-------------------------
+1) Variable de entorno ORIGEN_<X>_CONN / DW_*_CONN (DSN completo) — local rápido
+2) Secrets Manager vía SECRETS_ENDPOINT (MiniStack :4567 host / :4566 en Docker)
+3) Placeholders (solo para fallar con mensaje claro)
+
+En el TP:
+  dw/erp      → Postgres ERP (compose postgres-erp)
+  dw/rds-etl  → etl_writer sobre RDS MiniStack (schemas bronce + gold)
 """
 from __future__ import annotations
 
 import json
 import os
+from typing import Any
 
 
-def _from_secrets(secret_name: str) -> dict:
-    """Lee un secreto de AWS Secrets Manager. Se usa en AWS real."""
-    import boto3  # import diferido: no hace falta en local
+def _sm_client():
+    import boto3
 
-    client = boto3.client("secretsmanager")
-    resp = client.get_secret_value(SecretId=secret_name)
-    return json.loads(resp["SecretString"])
+    endpoint = os.environ.get("SECRETS_ENDPOINT")
+    kwargs: dict[str, Any] = {
+        "region_name": os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+        "aws_access_key_id": os.environ.get("AWS_ACCESS_KEY_ID", "test"),
+        "aws_secret_access_key": os.environ.get("AWS_SECRET_ACCESS_KEY", "test"),
+    }
+    if endpoint:
+        kwargs["endpoint_url"] = endpoint
+    return boto3.client("secretsmanager", **kwargs)
+
+
+def from_secrets(secret_name: str) -> dict:
+    """Lee JSON de Secrets Manager (MiniStack en Hobby, AWS en real)."""
+    client = _sm_client()
+    raw = client.get_secret_value(SecretId=secret_name)["SecretString"]
+    return json.loads(raw)
 
 
 def source_conn(origen: str) -> dict:
-    """Devuelve dict de conexion para un origen.
+    """Dict de conexión para un origen (erp, erp-foxpro, …).
 
-    Prioridad: variable de entorno ORIGEN_<ORIGEN>_CONN (local) ->
-    Secrets Manager dw/<origen> (AWS).
+    Env: ORIGEN_ERP_CONN = postgresql://user:pass@host:5432/db
+    Secret: dw/erp o dw/<origen>
     """
     env_key = "ORIGEN_" + origen.replace("-", "_").upper() + "_CONN"
     if os.environ.get(env_key):
         return {"dsn": os.environ[env_key]}
-    if os.environ.get("USE_SECRETS_MANAGER") == "1":
-        return _from_secrets(f"dw/{origen}")
-    # Placeholder local: completar con tus datos reales.
+
+    secret_name = os.environ.get("ORIGEN_SECRET") or f"dw/{origen.split('-')[0]}"
+    # erp-foxpro → dw/erp (lab-extra); override explícito con ORIGEN_SECRET
+    if origen.startswith("erp"):
+        secret_name = os.environ.get("ERP_SECRET", os.environ.get("ORIGEN_SECRET", "dw/erp"))
+
+    if os.environ.get("USE_SECRETS_MANAGER") == "1" or os.environ.get("SECRETS_ENDPOINT"):
+        return from_secrets(secret_name)
+
     return {"host": f"{origen}.internal", "user": "etl", "password": "CHANGE_ME"}
 
 
+def rds_etl_conn() -> dict:
+    """Credencial etl_writer (lab 08-tp) para escribir bronce / gold."""
+    if os.environ.get("DW_CRUDA_CONN"):
+        return {"dsn": os.environ["DW_CRUDA_CONN"]}
+    if os.environ.get("DW_DW_CONN") and not os.environ.get("SECRETS_ENDPOINT"):
+        # DSN único local hacia dw
+        return {"dsn": os.environ["DW_DW_CONN"]}
+
+    secret = os.environ.get("RDS_ETL_SECRET", "dw/rds-etl")
+    if os.environ.get("USE_SECRETS_MANAGER") == "1" or os.environ.get("SECRETS_ENDPOINT"):
+        data = from_secrets(secret)
+        # Desde Airflow/host el endpoint del secret es IP Docker interna;
+        # override a host.docker.internal:15432 (compose lab 09b).
+        data["host"] = os.environ.get("RDS_HOST_OVERRIDE", data.get("host"))
+        data["port"] = int(os.environ.get("RDS_PORT_OVERRIDE", data.get("port", 5432)))
+        return data
+
+    return {
+        "host": os.environ.get("RDS_HOST_OVERRIDE", "localhost"),
+        "port": int(os.environ.get("RDS_PORT_OVERRIDE", "15432")),
+        "dbname": "dw",
+        "username": "etl_writer",
+        "password": "CHANGE_ME",
+    }
+
+
 def cruda_dsn() -> str:
-    return os.environ.get("DW_CRUDA_CONN", "postgresql://postgres:postgres@postgres:5432/cruda")
+    """Compat lab viejo: DSN hacia capa cruda (= bronce en el TP)."""
+    return os.environ.get(
+        "DW_CRUDA_CONN",
+        "postgresql://etl_writer:CHANGE_ME@localhost:15432/dw",
+    )
 
 
 def dw_dsn() -> str:
-    return os.environ.get("DW_DW_CONN", "postgresql://postgres:postgres@postgres:5432/dw")
+    """Compat lab viejo: DSN hacia gold/DW."""
+    return os.environ.get(
+        "DW_DW_CONN",
+        "postgresql://etl_writer:CHANGE_ME@localhost:15432/dw",
+    )
