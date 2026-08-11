@@ -1,0 +1,169 @@
+{
+  "_comment": "Escenario desafío 1 TP: tráfico AWS (S3/Secrets) por VPC endpoints; NAT solo para orígenes externos. Baja nat-data y agrega interface endpoints.",
+  "notes": "Comparar con services.json vía: python pricing.py --services services.endpoints.json --budget 300",
+  "project": "Cloud-Foundations-TP-Integrador",
+  "region": "us-east-1",
+  "budget_target_usd": 300,
+  "services": [
+    {
+      "name": "rds-postgres-maz",
+      "type": "db",
+      "unit": "hs",
+      "monthly_usage": 730,
+      "unit_price": 0.144,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio — HA del DW."
+    },
+    {
+      "name": "rds-storage-gp3",
+      "type": "storage",
+      "unit": "GB-mes",
+      "monthly_usage": 250,
+      "unit_price": 0.115,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "rds-backup",
+      "type": "storage",
+      "unit": "GB-mes",
+      "monthly_usage": 120,
+      "unit_price": 0.095,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "ecs-fargate-airflow",
+      "type": "compute",
+      "unit": "hs",
+      "monthly_usage": 730,
+      "unit_price": 0.0617,
+      "sp_eligible": true,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "efs-airflow",
+      "type": "storage",
+      "unit": "GB-mes",
+      "monthly_usage": 10,
+      "unit_price": 0.30,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "nat-gateway",
+      "type": "network",
+      "unit": "hs",
+      "monthly_usage": 730,
+      "unit_price": 0.045,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Se mantiene: ETL aún necesita salida a orígenes on-prem / Internet (Solution §5)."
+    },
+    {
+      "name": "nat-data-processed",
+      "type": "network",
+      "unit": "GB",
+      "monthly_usage": 25,
+      "unit_price": 0.045,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Baja 100→25 GB: S3 (y APIs vía gateway/private) ya no saturan el NAT. Orígenes externos siguen por NAT."
+    },
+    {
+      "name": "vpce-s3-gateway",
+      "type": "network",
+      "unit": "mes",
+      "monthly_usage": 1,
+      "unit_price": 0.00,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Gateway S3: $0 (lab 07-v2). Interface endpoints (Secrets/ECR) cuestan ~USD 7.3/AZ — evaluar si el GB de NAT ahorrado lo justifica."
+    },
+    {
+      "name": "alb-api",
+      "type": "network",
+      "unit": "hs",
+      "monthly_usage": 730,
+      "unit_price": 0.0225,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "alb-lcu",
+      "type": "network",
+      "unit": "LCU-hs",
+      "monthly_usage": 730,
+      "unit_price": 0.008,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "lambda-gold-api",
+      "type": "compute",
+      "unit": "mes",
+      "monthly_usage": 1,
+      "unit_price": 4.00,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "s3-data-lake",
+      "type": "storage",
+      "unit": "GB-mes",
+      "monthly_usage": 150,
+      "unit_price": 0.023,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "s3-requests",
+      "type": "storage",
+      "unit": "k-req",
+      "monthly_usage": 500,
+      "unit_price": 0.0004,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "data-egress",
+      "type": "network",
+      "unit": "GB",
+      "monthly_usage": 80,
+      "unit_price": 0.09,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "cloudwatch",
+      "type": "storage",
+      "unit": "mes",
+      "monthly_usage": 1,
+      "unit_price": 6.00,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "secrets-manager",
+      "type": "db",
+      "unit": "secret-mes",
+      "monthly_usage": 5,
+      "unit_price": 0.40,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    }
+  ]
+}

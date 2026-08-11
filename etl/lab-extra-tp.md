@@ -1,93 +1,137 @@
-# Lab extra TP — ERP → Bronce → Gold (ETL real)
+# Lab extra TP — Origen ERP + paquete `etl/` (lógica de negocio)
 
-Extiende el arco **08-tp (RDS) + 09b (Airflow)** con un origen ERP de verdad y
-los dos grupos de ETL del to-be:
+<!--
+  Frontera de este lab vs lab 09b
+  ────────────────────────────────
+  ESTE LAB (etl/):  el ORIGEN y el CÓDIGO que transforma datos.
+    - Postgres ERP (Clientes / Productos / Ventas)
+    - Seed ficticio
+    - Secret dw/erp (credencial del origen)
+    - Módulos extract / transform / load (qué hace cada uno y por qué)
 
-| Grupo | Flujo | DAG | Código |
-|---|---|---|---|
-| **1** | ERP Postgres → schema `bronce` | `etl_erp_to_bronce` | `extract` → `transform.normalize` → `load.to_cruda` |
-| **2** | `bronce` → schema `gold` | `etl_bronce_to_gold` | `extract.from_bronce` → `transform.to_gold` → `load.to_dw` |
+  LAB 09b (ecs/):   el ECOSISTEMA DE CÓMPUTO (stand-in Fargate + EFS).
+    - IAM execution/task role, compose Airflow, efs-standin
+    - DDL de tablas en schema bronce (landing)
+    - Trigger de DAGs → bronce y → gold
+    - Verificación en RDS MiniStack
+
+  Por qué separar:
+    En el to-be, el origen ERP vive fuera de AWS (o en otra VPC) y el código
+    ETL es un artefacto versionado. ECS/Fargate solo ORQUESTA. Mezclar ambas
+    cosas en un solo lab confunde “dato de origen” con “plataforma de cómputo”.
+-->
+
+Extiende el TP con un **origen ERP real** (Postgres en Docker) y el paquete
+Python que los DAGs de Airflow importan. La ejecución en Airflow / DDL Bronce /
+carga Gold está en [`../ecs/lab-09b-tp.md`](../ecs/lab-09b-tp.md).
 
 ```text
-postgres-erp (Clientes / Productos / Ventas)
-        │  DAG etl_erp_to_bronce
-        ▼
-RDS MiniStack  schema bronce  (erp_clientes / erp_productos / erp_ventas)
-        │  DAG etl_bronce_to_gold
-        ▼
-RDS MiniStack  schema gold    (dim_* + fact_venta_linea)
+┌─ ESTE LAB (etl/) ─────────────────────┐     ┌─ LAB 09b (ecs/) ──────────────────┐
+│  postgres-erp                         │     │  Airflow ≈ Fargate                 │
+│  seed Clientes/Productos/Ventas       │────►│  DDL bronce.erp_*                   │
+│  secret dw/erp                        │     │  DAG etl_erp_to_bronce → bronce    │
+│  paquete extract/transform/load       │     │  DAG etl_bronce_to_gold → gold     │
+└───────────────────────────────────────┘     └────────────────────────────────────┘
 ```
 
 > **Por qué este lab**  
-> El DAG demo de 09b (`etl_bronce_origen_demo`) solo prueba conectividad.  
-> Acá el paquete `etl/` deja de ser stub: extract/transform/load reales,
-> tablas con ≥10 columnas y ≥10 filas, y carga dimensional al Modelo_DW.
+> Sin un origen con tablas y filas reales, el lab 09b solo puede demo de
+> conectividad (`etl_bronce_origen_demo`). Acá nace el dataset ERP y el
+> código reutilizable; 09b lo orquesta como haría ECS.
 
 ---
 
-## Prerequisitos
+## Script de ejecución (recomendado)
 
 ```powershell
-# Labs previos
-# 04 IAM · 07-v2 VPC · 08-tp RDS (dw + dw/rds-etl) · 09b Airflow (opcional pero recomendado)
-
 $env:AWS_ACCESS_KEY_ID = "test"
 $env:AWS_SECRET_ACCESS_KEY = "test"
 $env:AWS_DEFAULT_REGION = "us-east-1"
 $env:PYTHONIOENCODING = "utf-8"
 
-aws --endpoint-url http://localhost:4567 secretsmanager describe-secret `
-  --secret-id dw/rds-etl --query "Name" --output text
+python etl/etl_demo.py
+# Opcional (escribe RDS sin Airflow):
+#   python etl/etl_demo.py --with-pipelines
+# Orquestación EFS/Airflow (lab 09b):
+#   python ecs/ecs_demo.py --erp
 ```
+
+`etl_demo.py` automatiza Pasos 1–2 (ERP + secret). Los DAGs viven en lab 09b.
 
 ---
 
 ## Paso 1 — Levantar Postgres ERP en Docker
 
-**Qué:** servicio `postgres-erp` con DB `erp` y tablas `Clientes`, `Productos`, `Ventas`.  
-**Por qué:** simula el origen on-prem / VPC del to-be (Solution §5 — ETL grupo 1 por host).
+<!--
+  Qué: un Postgres dedicado llamado "ERP" con 3 tablas de negocio.
+  Por qué: en Solution Architecture el grupo 1 lee orígenes por HOST (no API).
+  El contenedor simula ese host on-prem / en VPC alcanzable vía NAT desde Fargate.
+-->
 
-El seed vive en [`erp/seed_erp.sql`](./erp/seed_erp.sql) (≥10 campos y ≥12 filas por tabla).
-Se monta en `docker-entrypoint-initdb.d` (solo corre en el **primer** arranque del volumen).
+**Qué hace:** crea el servicio `postgres-erp` (DB `erp`) e inicializa tablas.  
+**Para qué:** tener un origen estable que Airflow (lab 09b) pueda consultar.  
+**Por qué no va en 09b:** no es cómputo ECS; es el sistema fuente.
+
+Seed: [`erp/seed_erp.sql`](./erp/seed_erp.sql) — ≥10 columnas y ≥12 filas por tabla.
+Se monta en `docker-entrypoint-initdb.d` (solo en el **primer** arranque del volumen).
 
 ```powershell
 # Desde la raíz del repo
 docker compose up -d postgres-erp
 
-# Health
+# Health — ¿acepta conexiones?
 docker exec postgres-erp pg_isready -U postgres -d erp
 
-# Contar filas
-docker exec -i postgres-erp psql -U postgres -d erp -c `
-  "SELECT 'Clientes' t, count(*) FROM \"Clientes\" UNION ALL
-   SELECT 'Productos', count(*) FROM \"Productos\" UNION ALL
-   SELECT 'Ventas', count(*) FROM \"Ventas\";"
+# Contar filas (PowerShell: pipe por stdin; -c con \" rompe las comillas)
+@"
+SELECT 'Clientes' t, count(*) FROM "Clientes"
+UNION ALL SELECT 'Productos', count(*) FROM "Productos"
+UNION ALL SELECT 'Ventas', count(*) FROM "Ventas";
+"@ | docker exec -i postgres-erp psql -U postgres -d erp
+# Esperado: Clientes 12 · Productos 12 · Ventas 13
 ```
 
-| Host (desde Airflow) | Host (desde tu PC) | User / pass / DB |
+| Contexto | Host:puerto | User / pass / DB |
 |---|---|---|
-| `postgres-erp:5432` | `localhost:5434` | `postgres` / `postgres` / `erp` |
+| Desde Airflow (red Docker) | `postgres-erp:5432` | `postgres` / `postgres` / `erp` |
+| Desde tu PC | `localhost:5434` | igual |
 
-Si el volumen ya existía vacío:  
-`docker compose down` **sin** `-v`, borrá solo el volumen ERP, o aplicá el seed a mano:
+Si el volumen ya existía sin seed:
 
 ```powershell
 Get-Content etl\erp\seed_erp.sql -Raw | docker exec -i postgres-erp psql -U postgres -d erp
 ```
 
+### Tablas (qué representan)
+
+| Tabla | Rol de negocio | Por qué ≥10 campos |
+|---|---|---|
+| `Clientes` | Maestro de clientes (identidad, geo, segmento) | Fuerza un extract “ancho” como en un ERP real |
+| `Productos` | Catálogo (SKU, EAN, jerarquía, precios) | Alimenta dims de producto/categoría en gold |
+| `Ventas` | Líneas de orden (hechos) | Grano de `fact_venta_linea` |
+
 ---
 
-## Paso 2 — Secret `dw/erp` + Airflow con paquete `etl/`
+## Paso 2 — Secret `dw/erp` (credencial del origen)
 
-**Qué:** publicar credenciales del ERP en MiniStack y recrear Airflow montando `etl/`.  
-**Por qué:** el DAG no hardcodea passwords; usa el mismo patrón que Fargate + Secrets Manager.
+<!--
+  Qué: JSON en MiniStack Secrets Manager con host/user/password del ERP.
+  Por qué: mismo patrón to-be (Fargate lee secrets; no hardcode en la imagen).
+  Dónde se CONSUME: lab 09b (env ERP_SECRET en el compose Airflow).
+-->
+
+**Qué hace:** publica `dw/erp` en MiniStack (`:4567`).  
+**Para qué:** que el extract del paquete `etl/` (y luego el DAG) obtenga la conexión sin passwords en el código.  
+**Por qué en este lab:** el secreto describe el **origen**; 09b solo lo referencia.
 
 ```powershell
-# JSON válido (evitar ConvertTo-Json en PowerShell — rompe comillas)
+# JSON válido vía archivo (ConvertTo-Json en PowerShell suele romper comillas)
 $tmp = "$PWD\etl\_erp_secret.json"
+$utf8 = New-Object System.Text.UTF8Encoding $false
 [System.IO.File]::WriteAllText(
   $tmp,
-  '{"host":"postgres-erp","port":5432,"dbname":"erp","username":"postgres","password":"postgres","engine":"postgres"}'
+  '{"host":"postgres-erp","port":5432,"dbname":"erp","username":"postgres","password":"postgres","engine":"postgres"}',
+  $utf8
 )
 aws --endpoint-url http://localhost:4567 secretsmanager create-secret `
   --name dw/erp --secret-string "file://$tmp" 2>$null
@@ -95,190 +139,128 @@ aws --endpoint-url http://localhost:4567 secretsmanager put-secret-value `
   --secret-id dw/erp --secret-string "file://$tmp"
 Remove-Item $tmp -Force
 
-# Recrear Airflow para tomar PYTHONPATH + volumen ../etl
-cd ecs
-docker compose -f docker-compose.airflow.yaml up -d --force-recreate
-# UI http://localhost:8080  admin / admin
+# Solo Name — no imprimas SecretString
+aws --endpoint-url http://localhost:4567 secretsmanager describe-secret `
+  --secret-id dw/erp --query "Name" --output text
 ```
 
-Variables relevantes en [`../ecs/docker-compose.airflow.yaml`](../ecs/docker-compose.airflow.yaml):
+> `host=postgres-erp` es correcto **dentro de Docker**. Para pruebas del paquete
+> desde el host usá `ORIGEN_ERP_CONN=postgresql://postgres:postgres@localhost:5434/erp`
+> (ver Paso 4).
 
-| Env | Valor | Uso |
+---
+
+## Paso 3 — Paquete `etl/`: qué hace cada módulo y por qué
+
+<!--
+  La lógica vive FUERA de los DAGs a propósito:
+  - testeable sin Airflow
+  - misma librería en Fargate real
+  - DAGs = orquestación fina (lab 09b)
+-->
+
+**Qué hace:** implementa extract → transform → load de los dos grupos ETL.  
+**Para qué:** los DAGs de 09b solo importan y llaman; no duplican SQL/negocio.  
+**Por qué dos grupos:** Solution §4–5 — grupo 1 aterriza crudo en Bronce; grupo 2 modela Gold.
+
+### Grupo 1 — ERP → Bronce (landing)
+
+| Módulo | Qué hace | Por qué |
 |---|---|---|
-| `PYTHONPATH` | `/opt/airflow/packages` | Importa `etl.*` |
-| `ERP_SECRET` | `dw/erp` | Extract grupo 1 |
-| `RDS_ETL_SECRET` | `dw/rds-etl` | Load bronce / gold |
-| `SECRETS_ENDPOINT` | `http://ministack-integrador:4566` | MiniStack en red Docker |
+| [`extract/erp_foxpro.py`](./extract/erp_foxpro.py) | `SELECT *` de Clientes/Productos/Ventas vía `dw/erp` | Nombre histórico “foxpro”; en el TP el origen es Postgres ERP |
+| [`transform/normalize.py`](./transform/normalize.py) | Strip, metadatos `_origen` / `_tabla` | Limpieza ligera **sin** modelar el DW (eso es grupo 2) |
+| [`load/to_cruda.py`](./load/to_cruda.py) | UPSERT a `bronce.erp_*` + `ingest_batch` | “Cruda” = schema bronce del lab 08; nombre legacy del paquete |
+| [`config.py`](./config.py) / [`db.py`](./db.py) | Secrets + `psycopg2` | Un solo lugar para endpoints MiniStack / overrides RDS |
 
----
+Pipeline atajo: [`pipelines.py`](./pipelines.py) → `run_erp_to_bronce()`  
+(útil para test local; en producción lo dispara el DAG de 09b).
 
-## Paso 3 — DDL de tablas ERP en schema `bronce`
+### Grupo 2 — Bronce → Gold (dimensional)
 
-**Qué:** crear `bronce.erp_clientes`, `bronce.erp_productos`, `bronce.erp_ventas` si no existen.  
-**Por qué:** el lab 08-tp solo deja `ingest_batch` / `raw_record`. El landing estructurado es de este lab.
+| Módulo | Qué hace | Por qué |
+|---|---|---|
+| [`extract/from_bronce.py`](./extract/from_bronce.py) | Lee `bronce.erp_*` con `dw/rds-etl` | El grupo 2 **no** vuelve al ERP; lee el landing |
+| [`transform/to_gold.py`](./transform/to_gold.py) | Arma dims + `fact_venta_linea` | Mapeo al Modelo_DW (seed lab 08) |
+| [`load/to_dw.py`](./load/to_dw.py) | UPSERT en `gold.*` | Cierra analytics; Lambda solo lee gold |
 
-SQL: [`sql/bronce_erp_ddl.sql`](./sql/bronce_erp_ddl.sql).
+Pipeline atajo: `run_bronce_to_gold()`.
 
-Se aplica solo:
-
-```powershell
-# Opción A — el DAG lo hace en la task ensure_bronce_ddl
-# Opción B — a mano (como dwadmin)
-$c = (docker ps --filter "name=ministack-rds" --format "{{.Names}}" | Select-Object -First 1)
-Get-Content etl\sql\bronce_erp_ddl.sql -Raw | docker exec -i $c psql -U dwadmin -d dw
-```
-
-O desde Python (misma ruta que el DAG):
-
-```powershell
-$env:SECRETS_ENDPOINT = "http://localhost:4567"
-$env:RDS_HOST_OVERRIDE = "localhost"
-$env:RDS_PORT_OVERRIDE = "15432"
-python -c "from etl.load.to_cruda import ensure_bronce_erp_ddl; ensure_bronce_erp_ddl()"
-```
-
----
-
-## Paso 4 — Adaptación del paquete `etl/` (grupo 1)
-
-| Módulo | Rol |
-|---|---|
-| [`extract/erp_foxpro.py`](./extract/erp_foxpro.py) | `SELECT` a `Clientes` / `Productos` / `Ventas` vía `dw/erp` |
-| [`transform/normalize.py`](./transform/normalize.py) | `normalize_erp_*` — strip / metadatos (sin modelar DW) |
-| [`load/to_cruda.py`](./load/to_cruda.py) | DDL + UPSERT → `bronce.erp_*` + `ingest_batch` |
-| [`config.py`](./config.py) / [`db.py`](./db.py) | Secrets MiniStack + `psycopg2` |
-| [`pipelines.py`](./pipelines.py) | Atajo `run_erp_to_bronce()` |
-
-DAG: [`../ecs/efs-standin/dags/etl_erp_to_bronce.py`](../ecs/efs-standin/dags/etl_erp_to_bronce.py)
-
-```text
-ensure_bronce_ddl → extract_erp → transform_normalize → load_bronce
-```
-
-### Trigger
-
-```powershell
-docker exec ecs-airflow-scheduler-1 airflow dags unpause etl_erp_to_bronce
-docker exec ecs-airflow-scheduler-1 airflow dags trigger etl_erp_to_bronce
-```
-
-### Verificar bronce
-
-```powershell
-$c = (docker ps --filter "name=ministack-rds" --format "{{.Names}}" | Select-Object -First 1)
-docker exec -i $c psql -U dwadmin -d dw -c "SELECT count(*) FROM bronce.erp_clientes;"
-docker exec -i $c psql -U dwadmin -d dw -c "SELECT count(*) FROM bronce.erp_productos;"
-docker exec -i $c psql -U dwadmin -d dw -c "SELECT nro_orden, id_cliente, id_producto, importe_neto FROM bronce.erp_ventas LIMIT 5;"
-docker exec -i $c psql -U dwadmin -d dw -c "SELECT * FROM bronce.ingest_batch WHERE origen='erp' ORDER BY batch_id DESC LIMIT 3;"
-```
-
-Esperado: ≥12 clientes/productos y ≥12 líneas de venta; `origen='erp'`.
-
----
-
-## Paso 5 — DAG grupo 2: Bronce → Gold
-
-**Qué:** leer staging, transformar al modelo dimensional y UPSERT en `gold`.  
-**Por qué:** cierra el flujo Solution §4–5 (grupo 2 carga analytics; Lambda solo lee gold).
-
-| Módulo | Rol |
-|---|---|
-| [`extract/from_bronce.py`](./extract/from_bronce.py) | Lee `bronce.erp_*` |
-| [`transform/to_gold.py`](./transform/to_gold.py) | Arma `dim_cliente`, `dim_producto`, `fact_venta_linea`, dims de apoyo |
-| [`load/to_dw.py`](./load/to_dw.py) | UPSERT en `gold.*` |
-| [`pipelines.py`](./pipelines.py) | `run_bronce_to_gold()` |
-
-DAG: [`../ecs/efs-standin/dags/etl_bronce_to_gold.py`](../ecs/efs-standin/dags/etl_bronce_to_gold.py)
-
-```text
-extract_bronce → transform_to_gold → load_gold
-```
-
-Mapeo principal:
+### Mapeo conceptual (lo ejecuta 09b)
 
 | Bronce | Gold |
 |---|---|
 | `erp_clientes` | `dim_cliente` + `dim_geografia` |
 | `erp_productos` | `dim_producto` + `dim_categoria` |
-| `erp_ventas` | `fact_venta_linea` + `dim_fecha` / `dim_canal` / `dim_metodo_pago` / `dim_moneda` |
+| `erp_ventas` | `fact_venta_linea` + dims fecha/canal/pago/moneda |
 
-SKs del lab = IDs del ERP (simple y trazable). En producción usarías surrogates + SCD2 reales.
-
-### Trigger
-
-```powershell
-docker exec ecs-airflow-scheduler-1 airflow dags unpause etl_bronce_to_gold
-docker exec ecs-airflow-scheduler-1 airflow dags trigger etl_bronce_to_gold
-```
-
-### Verificar gold
-
-```powershell
-$c = (docker ps --filter "name=ministack-rds" --format "{{.Names}}" | Select-Object -First 1)
-docker exec -i $c psql -U dwadmin -d dw -c "SELECT count(*) FROM gold.dim_cliente;"
-docker exec -i $c psql -U dwadmin -d dw -c "SELECT count(*) FROM gold.dim_producto;"
-docker exec -i $c psql -U dwadmin -d dw -c "SELECT nro_orden, cliente_sk, producto_sk, importe_neto, margen_bruto FROM gold.fact_venta_linea ORDER BY venta_sk LIMIT 5;"
-```
+SKs del lab = IDs del ERP (trazable). En prod: surrogates + SCD2 reales.
 
 ---
 
-## Test sin Airflow (opcional)
+## Paso 4 — Test del paquete **sin** Airflow (opcional)
+
+<!--
+  Qué: validar extract/load en tu máquina antes de meter orquestación.
+  Por qué: fallos de SQL/secret se detectan más rápido que vía UI de Airflow.
+  Importante: esto NO reemplaza el lab 09b; solo prueba la librería.
+-->
+
+**Qué hace:** corre los pipelines en proceso local.  
+**Para qué:** debug del código `etl/` sin scheduler.  
+**Por qué no alcanza:** no ejercita compose, EFS stand-in, IAM modelo ni DAGs.
 
 ```powershell
 $env:SECRETS_ENDPOINT = "http://localhost:4567"
 $env:RDS_HOST_OVERRIDE = "localhost"
 $env:RDS_PORT_OVERRIDE = "15432"
-$env:ERP_SECRET = "dw/erp"
-
-# Ojo: desde el host el secret dw/erp apunta a host=postgres-erp (DNS Docker).
-# Para probar extract en el host, override temporal:
-python -c "
-from etl.db import connect, fetch_dicts
-import os
-cfg={'host':'localhost','port':5434,'dbname':'erp','username':'postgres','password':'postgres'}
-conn=connect(cfg)
-print(fetch_dicts(conn, 'SELECT count(*) AS n FROM \"Clientes\"'))
-conn.close()
-"
+# Desde el host no uses DNS postgres-erp; usá DSN local:
+$env:ORIGEN_ERP_CONN = "postgresql://postgres:postgres@localhost:5434/erp"
 
 python -c "from etl.pipelines import run_erp_to_bronce, run_bronce_to_gold; print('g1', run_erp_to_bronce()); print('g2', run_bronce_to_gold())"
 ```
 
-> Si corrés el pipeline en el host, el secret `dw/erp` debe usar `"host":"localhost","port":5434`.  
-> Dejá `postgres-erp:5432` para Airflow (red Docker) y usá el override solo en pruebas locales.
+> Si vas por el camino “oficial” del TP: **no hace falta este paso**.  
+> Seguí en lab 09b (DDL + DAGs).
 
 ---
 
-## Checkpoint
+## Siguiente: lab 09b (ecosistema ECS + EFS)
 
-- [ ] `postgres-erp` up con ≥10 filas en Clientes / Productos / Ventas (≥10 cols)
-- [ ] Secret `dw/erp` en MiniStack
-- [ ] Tablas `bronce.erp_*` creadas (paso 3 / task DDL)
-- [ ] DAG `etl_erp_to_bronce` success
-- [ ] DAG `etl_bronce_to_gold` success
-- [ ] Filas en `gold.dim_cliente`, `gold.dim_producto`, `gold.fact_venta_linea`
-- [ ] Claro: orquestación en Airflow (09b); lógica en paquete `etl/`
+Todo lo que sigue es **cómputo / orquestación** sobre el stand-in Fargate+EFS:
+
+1. IAM + **EFS stand-in** (`ecs/efs-standin/{dags,logs}`) + Compose Airflow
+2. Los DAGs `etl_erp_to_bronce` / `etl_bronce_to_gold` **viven en ese EFS** (no en `etl/`)
+3. Mount del paquete `etl/` como librería (`PYTHONPATH`) + env secrets
+4. **DDL** `bronce.erp_*` en la RDS
+5. Trigger de los DAGs (Airflow los lee desde el mount EFS)
+6. Verificar filas en bronce/gold **y** logs bajo `efs-standin/logs`
+
+→ Abrí [`../ecs/lab-09b-tp.md`](../ecs/lab-09b-tp.md) (Pasos 5–7 del flujo ERP, anclados a EFS).
 
 ---
 
-## Archivos tocados
+## Checkpoint (solo este lab)
 
-| Ruta | Rol |
-|---|---|
-| `etl/lab-extra-tp.md` | Esta guía |
-| `etl/erp/seed_erp.sql` | Seed origen ERP |
-| `etl/sql/bronce_erp_ddl.sql` | DDL landing bronce |
-| `etl/extract/erp_foxpro.py` | Extract grupo 1 |
-| `etl/extract/from_bronce.py` | Extract grupo 2 |
-| `etl/transform/normalize.py` | Transform grupo 1 |
-| `etl/transform/to_gold.py` | Transform grupo 2 |
-| `etl/load/to_cruda.py` | Load → bronce |
-| `etl/load/to_dw.py` | Load → gold |
-| `etl/pipelines.py` | Pipelines invocables |
-| `ecs/efs-standin/dags/etl_erp_to_bronce.py` | DAG grupo 1 |
-| `ecs/efs-standin/dags/etl_bronce_to_gold.py` | DAG grupo 2 |
-| `compose.yaml` | Servicio `postgres-erp` |
-| `ecs/docker-compose.airflow.yaml` | Mount `etl/` + env secrets |
+- [ ] `postgres-erp` up; counts Clientes/Productos/Ventas OK
+- [ ] Secret `dw/erp` existe en MiniStack
+- [ ] Entendés qué hace cada módulo de `extract` / `transform` / `load` y por qué hay dos grupos
+- [ ] Claro: **origen + código acá; Airflow/DDL/DAGs en 09b**
+
+---
+
+## Archivos de este lab
+
+| Ruta | Rol | Por qué está acá |
+|---|---|---|
+| `lab-extra-tp.md` | Esta guía | Origen + lógica |
+| `etl_demo.py` | Script de ejecución | ERP + secret (+ pipelines opcionales) |
+| `erp/seed_erp.sql` | Datos ERP | Pertenece al origen |
+| `extract/*.py`, `transform/*.py`, `load/*.py` | Código ETL | Artefacto de negocio |
+| `pipelines.py`, `config.py`, `db.py` | Glue del paquete | Sin orquestador |
+| `sql/bronce_erp_ddl.sql` | DDL landing | **Archivo vive en etl/** (SQL de datos); **se aplica en lab 09b** |
+| `compose.yaml` → `postgres-erp` | Contenedor origen | No es Fargate |
+
+DAGs y compose Airflow: ver carpeta `ecs/`.
 
 ---
 
@@ -286,7 +268,7 @@ python -c "from etl.pipelines import run_erp_to_bronce, run_bronce_to_gold; prin
 
 | Fuente | Aporte |
 |---|---|
-| 08-tp | RDS `dw`, schemas `bronce`/`gold`, secret `dw/rds-etl` |
-| 09b | Airflow stand-in + EFS dags/logs |
-| Solution §4–5 | Grupo 1 → Bronce; grupo 2 → Gold; secrets + least privilege |
-| `docs/Modelo_DW` (vía seed_tp) | Destino dimensional de `to_gold` / `to_dw` |
+| Solution §4–5 | Grupo 1 (origen→Bronce) y grupo 2 (Bronce→Gold) |
+| 08-tp | Destino RDS `dw` (schemas ya creados) |
+| **09b** | Orquesta este paquete en el stand-in ECS |
+| Modelo_DW (seed_tp) | Forma de las tablas gold que escribe `to_gold` / `to_dw` |

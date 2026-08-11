@@ -29,10 +29,8 @@ awslocal iam get-role --role-name app-role --query "Role.Arn"
 aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls | findstr snapshot-data-lake
 
 # Lab 07-v2 — VPC + SG + subnets RDS (LocalStack)
-awslocal ec2 describe-vpcs --filters Name=tag:Name,Values=tp-integrador-vpc \
-  --query "Vpcs[0].VpcId"
-awslocal ec2 describe-security-groups --filters Name=group-name,Values=sg-rds \
-  --query "SecurityGroups[0].GroupId"
+awslocal ec2 describe-vpcs --filters Name=tag:Name,Values=tp-integrador-vpc --query "Vpcs[0].VpcId"
+awslocal ec2 describe-security-groups --filters Name=group-name,Values=sg-rds --query "SecurityGroups[0].GroupId"
 
 # MiniStack arriba
 curl -s http://localhost:4567/_ministack/health
@@ -153,17 +151,13 @@ $env:AWS_DEFAULT_REGION = "us-east-1"
 curl.exe -s http://localhost:4567/_ministack/health
 
 # Instancia RDS
-aws --endpoint-url http://localhost:4567 rds describe-db-instances `
-  --query "DBInstances[].{Id:DBInstanceIdentifier,Status:DBInstanceStatus,Endpoint:Endpoint.Address,Port:Endpoint.Port}" `
-  --output table
+aws --endpoint-url http://localhost:4567 rds describe-db-instances ` --query "DBInstances[].{Id:DBInstanceIdentifier,Status:DBInstanceStatus,Endpoint:Endpoint.Address,Port:Endpoint.Port}" ` --output table
 
 # Secrets del lab
-aws --endpoint-url http://localhost:4567 secretsmanager list-secrets `
-  --query "SecretList[].Name" --output table
+aws --endpoint-url http://localhost:4567 secretsmanager list-secrets ` --query "SecretList[].Name" --output table
 
 # Snapshots RDS (API MiniStack)
-aws --endpoint-url http://localhost:4567 rds describe-db-snapshots `
-  --db-instance-identifier tp-dw-db --output table
+aws --endpoint-url http://localhost:4567 rds describe-db-snapshots ` --db-instance-identifier tp-dw-db --output table
 ```
 
 Entrar a Postgres (MiniStack nombra el container `ministack-rds-<hash>-instance-tp-dw-db`):

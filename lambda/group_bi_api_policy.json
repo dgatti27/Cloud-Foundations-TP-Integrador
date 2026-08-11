@@ -1,0 +1,25 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InvokeGoldApiLambda",
+      "Effect": "Allow",
+      "Action": ["lambda:InvokeFunction"],
+      "Resource": [
+        "arn:aws:lambda:*:*:function:tp-gold-api"
+      ]
+    },
+    {
+      "Sid": "DenySecretsAndBronce",
+      "Effect": "Deny",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:*:*:secret:dw/rds-master*",
+        "arn:aws:secretsmanager:*:*:secret:dw/rds-etl*",
+        "arn:aws:secretsmanager:*:*:secret:dw/erp*"
+      ]
+    }
+  ]
+}

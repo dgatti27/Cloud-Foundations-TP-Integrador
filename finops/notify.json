@@ -1,0 +1,32 @@
+[
+  {
+    "Notification": {
+      "ComparisonOperator": "GREATER_THAN",
+      "NotificationType": "ACTUAL",
+      "Threshold": 80.0,
+      "ThresholdType": "PERCENTAGE",
+      "NotificationState": "OK"
+    },
+    "Subscribers": [
+      {
+        "Address": "you@example.com",
+        "SubscriptionType": "EMAIL"
+      }
+    ]
+  },
+  {
+    "Notification": {
+      "ComparisonOperator": "GREATER_THAN",
+      "NotificationType": "FORECASTED",
+      "Threshold": 100.0,
+      "ThresholdType": "PERCENTAGE",
+      "NotificationState": "OK"
+    },
+    "Subscribers": [
+      {
+        "Address": "you@example.com",
+        "SubscriptionType": "EMAIL"
+      }
+    ]
+  }
+]

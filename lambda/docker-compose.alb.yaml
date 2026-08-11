@@ -1,0 +1,28 @@
+# ALB stand-in (lab-api): entrada pública → invoca Lambda en LocalStack.
+# AWS real: ALB en public-alb-* (sg-alb :443) → Lambda en private-compute-* (sg-api).
+#
+#   docker compose -f lambda/docker-compose.alb.yaml up -d --build
+#   Postman GET http://localhost:8088/gold/query?table=dim_cliente&columns=nombre,email&condition=segmento=retail
+
+services:
+  alb-standin:
+    build: ./alb_standin
+    container_name: alb-standin-integrador
+    ports:
+      - "8088:8088"
+    environment:
+      LOCALSTACK_ENDPOINT: http://localstack-integrador:4566
+      LAMBDA_FUNCTION_NAME: tp-gold-api
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      PORT: "8088"
+    networks:
+      - default
+    # Modelo "subnet pública": solo este contenedor es alcanzable desde el host/Postman.
+    # Lambda permanece detrás (LocalStack), equivalente a privada.
+
+networks:
+  default:
+    name: cloud-foundations-tp-integrador_default
+    external: true

@@ -306,3 +306,9 @@ Las dos coexisten en proyectos reales: IaC para infra, scripts para operaciones 
 | Backend remoto del state (S3 + DynamoDB lock) | ✅ | ✅ |
 
 El flujo de IaC sobre el stack del lab es indistinguible. Para containers en producción (ECS, EKS), Learner Lab del Mod 11 del AWS Academy.
+
+---
+
+## Siguiente: stack completo del TP
+
+Cuando el ciclo `init/plan/apply` con el bucket te quede claro, pasá a [`lab-09-tp.md`](lab-09-tp.md): OpenTofu declara IAM + VPC + S3/MinIO + RDS + Secrets + CloudWatch + Lambda (+ ECS/EFS o stand-in Hobby) de forma **idempotente**.

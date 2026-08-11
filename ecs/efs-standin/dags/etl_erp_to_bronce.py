@@ -1,6 +1,10 @@
-"""DAG grupo 1 (lab-extra-tp): ERP Postgres → schema bronce (RDS MiniStack).
+"""DAG grupo 1 (lab 09b / camino B): ERP Postgres → schema bronce.
 
-Tasks alineadas a etl/extract|transform|load:
+Ubicación OBLIGATORIA: ecs/efs-standin/dags/  (≈ EFS access point /airflow/dags).
+Los logs de cada run van a ecs/efs-standin/logs/ (≈ EFS /airflow/logs).
+No mover este archivo fuera del stand-in: scheduler y webserver solo ven ese mount.
+
+Lógica de negocio: paquete etl/ (lab-extra). Este archivo solo orquesta tasks:
   1) ensure_bronce_ddl
   2) extract_erp
   3) transform_normalize

@@ -53,7 +53,13 @@ AZ_A="${REGION}a"
 AZ_B="${REGION}b"
 AWS="${AWS_CLI:-awslocal}"
 ```
-
+```powershell
+if (-not $env:AWS_DEFAULT_REGION) { $env:AWS_DEFAULT_REGION = "us-east-1" }
+$REGION = $env:AWS_DEFAULT_REGION
+$AZ_A = "${REGION}a"
+$AZ_B = "${REGION}b"
+$AWS = if ($env:AWS_CLI) { $env:AWS_CLI } else { "awslocal" }
+```
 ---
 
 ## Mapa CIDR (referencia)
@@ -76,11 +82,24 @@ Contenedor de red: espacio de direcciones + DNS. Todavía no hay subredes ni Int
 VPC_ID=$($AWS ec2 create-vpc --cidr-block 10.0.0.0/16 \
   --query "Vpc.VpcId" --output text)
 
+# Es una ruta JMESPath sobre la respuesta JSON de create-vpc.
+# La API devuelve algo así:
+#{
+#  "Vpc": {
+#    "VpcId": "vpc-0a1b2c3d4e5f67890",
+#    "CidrBlock": "10.0.0.0/16",
+#    ...
+#  }
+#}
+#--query "Vpc.VpcId" significa: entrá al objeto Vpc y sacá el campo VpcId.
+#Con --output text solo imprime el string (vpc-...), sin JSON, para poder guardarlo en $VPC_ID
+
 $AWS ec2 create-tags --resources "$VPC_ID" --tags \
   Key=Name,Value=tp-integrador-vpc \
   Key=Project,Value=TP-Integrador \
   Key=Lab,Value=07-v2
 
+#Activar 2 atributos DNS de la vpc
 $AWS ec2 modify-vpc-attribute --vpc-id "$VPC_ID" --enable-dns-hostnames
 $AWS ec2 modify-vpc-attribute --vpc-id "$VPC_ID" --enable-dns-support
 
@@ -145,6 +164,10 @@ $AWS ec2 create-tags --resources "$SUBNET_COMPUTE_B" --tags \
 $AWS ec2 modify-subnet-attribute --subnet-id "$SUBNET_PUBLIC_A" --map-public-ip-on-launch
 $AWS ec2 modify-subnet-attribute --subnet-id "$SUBNET_PUBLIC_B" --map-public-ip-on-launch
 
+# Hace que, en esa subnet pública, cada instancia/ENI nueva reciba una IP pública automáticamente al lanzarse.
+# Sin ese flag, solo tendría IP privada y no saldría a Internet aunque haya Internet Gateway (salvo que le asignes una IP pública a mano).
+#Solo tiene sentido en subnets públicas (las del ALB: SUBNET_PUBLIC_A / B). En las privadas (RDS, compute) no se usa.
+
 echo "Públicas ALB:  $SUBNET_PUBLIC_A ($AZ_A) | $SUBNET_PUBLIC_B ($AZ_B)"
 echo "Privadas RDS:  $SUBNET_RDS_A ($AZ_A) | $SUBNET_RDS_B ($AZ_B)"
 echo "Privadas cmp:  $SUBNET_COMPUTE_A ($AZ_A) | $SUBNET_COMPUTE_B ($AZ_B)"
@@ -168,6 +191,7 @@ echo "Privadas cmp:  $SUBNET_COMPUTE_A ($AZ_A) | $SUBNET_COMPUTE_B ($AZ_B)"
 IGW_ID=$($AWS ec2 create-internet-gateway \
   --query "InternetGateway.InternetGatewayId" --output text)
 $AWS ec2 attach-internet-gateway --internet-gateway-id "$IGW_ID" --vpc-id "$VPC_ID"
+#Conecta IGW a la VPC
 $AWS ec2 create-tags --resources "$IGW_ID" --tags Key=Name,Value=tp-igw
 echo "IGW: $IGW_ID"
 ```
@@ -195,8 +219,12 @@ $AWS ec2 create-route \
   --destination-cidr-block 0.0.0.0/0 \
   --gateway-id "$IGW_ID"
 
+#Cre la ruta por defecto asociado a la tabla de ruteo
+#Todo lo que no sea tráfico local de la VPC (0.0.0.0/0 = “cualquier destino”) → salir por el Internet Gateway ($IGW_ID).
+
 $AWS ec2 associate-route-table --route-table-id "$RT_PUBLIC" --subnet-id "$SUBNET_PUBLIC_A"
 $AWS ec2 associate-route-table --route-table-id "$RT_PUBLIC" --subnet-id "$SUBNET_PUBLIC_B"
+#Asocia la subnet publica a la tabla de ruteo
 
 $AWS ec2 describe-route-tables --route-table-ids "$RT_PUBLIC" \
   --query "RouteTables[0].Routes"
@@ -210,7 +238,7 @@ BI (Internet) → IGW → ALB (subredes públicas, Multi-AZ) → Lambda (compute
 
 ---
 
-## Paso 5 — Route tables privadas
+## Paso 5 — Route tables privadas - Lo mismo que el paso 4 pero para las subnet privadas
 
 Dos tablas: **RDS** (sin Internet) y **compute** (después le agregamos NAT solo a esta).
 
@@ -264,7 +292,8 @@ $AWS ec2 create-tags --resources "$EIP_ALLOC" --tags Key=Name,Value=tp-nat-eip
 $AWS ec2 wait nat-gateway-available --nat-gateway-ids "$NAT_ID" 2>/dev/null || \
   echo "WARN: wait nat-gateway-available no disponible; continuar"
 
-# La ruta crítica: solo COMPUTE sale; RDS no
+# La ruta crítica: solo COMPUTE sale (ECS); RDS no
+#La salida de la subnet compute hacia las fuentes de datos
 $AWS ec2 create-route \
   --route-table-id "$RT_COMPUTE" \
   --destination-cidr-block 0.0.0.0/0 \
@@ -384,6 +413,10 @@ ENDPOINT_S3=$($AWS ec2 create-vpc-endpoint \
   --vpc-endpoint-type Gateway \
   --route-table-ids "$RT_COMPUTE" "$RT_RDS" \
   --query "VpcEndpoint.VpcEndpointId" --output text)
+#Crea un VPC Endpoint Gateway hacia S3 de AWS.
+#En concreto:
+#create-vpc-endpoint — abre un camino privado VPC → servicio S3 (com.amazonaws.<region>.s3), tipo Gateway (sin ENI; agrega rutas en las route tables).
+#Lo asocia a $RT_COMPUTE y $RT_RDS — ETL y RDS pueden ir a S3 sin pasar por el NAT/Internet.
 
 $AWS ec2 create-tags --resources "$ENDPOINT_S3" --tags Key=Name,Value=vpce-s3-datalake
 echo "ENDPOINT_S3=$ENDPOINT_S3"

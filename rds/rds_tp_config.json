@@ -1,8 +1,23 @@
 {
-  "_comment": "Plan declarativo del lab 08-TP. Lo consume rds_tp_demo.py. No ejecuta nada por sí solo.",
+  "_comment": "Plan declarativo del lab 08-TP. Lo consume rds_tp_demo.py (json.loads). No ejecuta nada por sí solo: solo parámetros. Las claves _comment / _docs / Notes son documentación; el script lee campos concretos.",
 
   "db_instance": {
-    "_comment": "Parámetros de create-db-instance en MiniStack (:4567). Una sola RDS PostgreSQL Multi-AZ; la base 'dw' aloja schemas bronce + gold.",
+    "_comment": "Parámetros de create-db-instance en MiniStack (:4567). Define UNA instancia PostgreSQL Multi-AZ (tp-dw-db). Dentro de la base 'dw' viven los schemas bronce + gold (no son dos RDS).",
+    "_docs": {
+      "Identifier": "Nombre único de la instancia RDS (DBInstanceIdentifier).",
+      "Engine": "Motor: postgres.",
+      "EngineVersion": "Versión mayor.menor del motor (p. ej. 16.3).",
+      "InstanceClass": "Tamaño de cómputo/memoria (db.t3.medium en el to-be del TP).",
+      "AllocatedStorage": "Disco inicial en GiB.",
+      "MasterUsername": "Usuario admin de bootstrap (solo seed / ops; no lo usan ETL ni Lambda en runtime).",
+      "DBName": "Base inicial creada al provisionar. Una sola DB 'dw' con varios schemas.",
+      "Port": "Puerto TCP de Postgres (5432).",
+      "BackupRetentionPeriod": "Días de retención de backups automáticos.",
+      "MultiAZ": "true = standby en otra AZ (HA). Requiere subnet group Multi-AZ.",
+      "StorageEncrypted": "Cifrado en reposo del storage.",
+      "PubliclyAccessible": "false = sin IP pública; solo acceso desde la VPC (SG).",
+      "Notes": "Texto libre de contexto; el demo no lo envía a la API."
+    },
     "Identifier": "tp-dw-db",
     "Engine": "postgres",
     "EngineVersion": "16.3",
@@ -19,7 +34,15 @@
   },
 
   "schemas": {
-    "_comment": "Diseño lógico dentro de la base 'dw' (seed_tp.sql). No son dos RDS: son dos schemas con roles distintos.",
+    "_comment": "Diseño lógico DENTRO de la base 'dw' (aplicado por seed_tp.sql). No crea instancias: documenta propósito y roles de cada schema del medallón (bronce crudo → gold analítico).",
+    "_docs": {
+      "bronce.Purpose": "Capa cruda: ETLs (ECS) cargan desde data sources sin transformar para consumo BI.",
+      "bronce.WriteRole": "Rol Postgres que escribe en bronce (etl_writer).",
+      "bronce.ReadRole": "Quién lee bronce (mismo etl_writer; la API no toca bronce).",
+      "gold.Purpose": "Capa procesada / DW: tablas del Modelo_DW; Lambda API solo SELECT.",
+      "gold.WriteRole": "ETL (grupo 2 / transform) escribe gold como etl_writer.",
+      "gold.ReadRole": "api_reader: solo lectura para la Lambda/BI API."
+    },
     "bronce": {
       "Purpose": "Datos crudos: ETLs (ECS) escriben desde los data sources",
       "WriteRole": "etl_writer",
@@ -33,7 +56,14 @@
   },
 
   "secrets": {
-    "_comment": "Nombres en Secrets Manager (MiniStack). Tres credenciales: master (bootstrap), ETL (ECS), API (Lambda).",
+    "_comment": "Nombres y descripciones en Secrets Manager (MiniStack :4567). El demo genera passwords y publica JSON {username,password,host,...}. Tres secretos: master (bootstrap), etl (ECS), api (Lambda).",
+    "_docs": {
+      "master": "Credencial dwadmin — create-db-instance, seed_tp.sql, pg_dump. No para apps en runtime.",
+      "etl": "Credencial etl_writer — ECS escribe bronce y gold.",
+      "api": "Credencial api_reader — Lambda API: SELECT solo en schema gold.",
+      "Name": "Path del secreto en Secrets Manager.",
+      "Description": "Texto visible al listar el secreto; ayuda a ops."
+    },
     "master": {
       "Name": "dw/rds-master",
       "Description": "Master de RDS tp-dw-db — solo bootstrap / admin"
@@ -49,8 +79,18 @@
   },
 
   "security_group": {
-    "_comment": "No crea el SG: reusa sg-rds del lab 07-v2 (LocalStack EC2). Lookup por nombre + VPC tag.",
+    "_comment": "Firewall de red para el puerto 5432. NO crea un SG nuevo por defecto: reusa el del lab 07-v2 (lookup en LocalStack :4566). Ingress esperado: solo sg-api y sg-ecs-etl → 5432.",
+    "_docs": {
+      "Name": "Nombre lógico / tag Name a buscar (en IaC el GroupName real puede ser tp-rds; AWS limita GroupName sg-*).",
+      "LookupByTagName": "true = buscar por tag Name además/en lugar de GroupName exacto.",
+      "Description": "Documentación del rol del SG.",
+      "VpcLookupTag": "Tag Name de la VPC (tp-integrador-vpc) donde buscar el SG.",
+      "IngressFromSgNames": "SGs origen permitidos hacia el puerto RDS (referencia de diseño).",
+      "Port": "Puerto Postgres expuesto en las reglas de ingress.",
+      "CreateIfMissing": "false = fallar si no está el SG del lab 07; no inventar uno desconectado."
+    },
     "Name": "sg-rds",
+    "LookupByTagName": true,
     "Description": "Reusa SG del lab 07-v2. Ingress 5432 desde sg-api y sg-ecs-etl.",
     "VpcLookupTag": "tp-integrador-vpc",
     "IngressFromSgNames": ["sg-api", "sg-ecs-etl"],
@@ -59,21 +99,37 @@
   },
 
   "db_subnet_group": {
-    "_comment": "Grupo de subnets Multi-AZ para RDS. Busca subnets con tag Role=rds en la VPC del lab 07-v2.",
+    "_comment": "DB subnet group Multi-AZ: le dice a RDS en qué subnets privadas puede colocar primary/standby. El demo busca subnets con tag Role=rds en la VPC del lab 07-v2 (private-rds-a / private-rds-b).",
+    "_docs": {
+      "Name": "Nombre del DBSubnetGroup en RDS/MiniStack.",
+      "Description": "Texto descriptivo del grupo.",
+      "SubnetRoleTag": "Valor del tag Role en las subnets a incluir (rds)."
+    },
     "Name": "tp-rds-subnets",
     "Description": "DB subnet group Multi-AZ — private-rds-a / private-rds-b (lab 07-v2)",
     "SubnetRoleTag": "rds"
   },
 
   "snapshot": {
-    "_comment": "Destino del dump/snapshot. En local: pg_dump → MinIO. En AWS real: export-task al mismo bucket S3.",
+    "_comment": "Destino del backup/export. En local: create-db-snapshot (MiniStack) + pg_dump subido a MinIO. En AWS real: el mismo bucket/prefix sería el destino de un export-task a S3.",
+    "_docs": {
+      "S3Bucket": "Bucket del lake para dumps (snapshot-data-lake en MinIO :9000).",
+      "S3Prefix": "Prefijo/carpeta dentro del bucket (rds/tp-dw-db/...).",
+      "Notes": "Contexto local vs AWS; el demo no lo envía a la API."
+    },
     "S3Bucket": "snapshot-data-lake",
     "S3Prefix": "rds/tp-dw-db",
     "Notes": "pg_dump → PutObject a MinIO (:9000). create-db-snapshot en MiniStack. En AWS real: start-export-task al mismo bucket."
   },
 
   "endpoints": {
-    "_comment": "URLs locales de cada emulador. El demo apunta boto3/CLI al servicio correcto según la operación.",
+    "_comment": "URLs de los emuladores locales. El demo apunta cada cliente boto3 al servicio correcto: MinIO=lake S3, LocalStack=VPC/IAM, MiniStack=RDS+Secrets DB.",
+    "_docs": {
+      "minio": "Object storage S3-compatible del data lake (:9000).",
+      "localstack": "EC2/VPC/IAM del lab 07 (:4566). S3 de LocalStack no se usa para el lake.",
+      "ministack": "RDS Postgres real + Secrets Manager de la DB (:4567).",
+      "Notes": "Resumen de responsabilidades por endpoint."
+    },
     "minio": "http://localhost:9000",
     "localstack": "http://localhost:4566",
     "ministack": "http://localhost:4567",

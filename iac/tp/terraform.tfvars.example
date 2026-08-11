@@ -1,0 +1,11 @@
+# Copia a terraform.tfvars si querés overrides locales (gitignoreados).
+project_name = "tp-integrador"
+region       = "us-east-1"
+
+localstack_endpoint = "http://localhost:4566"
+ministack_endpoint  = "http://localhost:4567"
+minio_endpoint      = "http://localhost:9000"
+
+enable_nat     = true
+enable_ecs_api = false   # true solo en AWS real / LocalStack Pro
+apply_rds_seed = true

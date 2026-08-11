@@ -7,6 +7,16 @@ Cierra el arco **IAM (lab 04) → red/VPC → object storage (hoy)**. Los bucket
 > **No** implementa Block Public Access (`PutPublicAccessBlock`) — en el lab queda comentado; el acceso se controla no exponiendo el puerto y con policies.  
 > LocalStack S3 queda **comentado** en `compose.yaml` y en este lab (líneas conservadas).
 
+### Tres caminos (mismo alcance)
+
+| Camino | Infra (buckets / versioning / SSE / policies) | Demos (mutate, STS, presign) |
+|---|---|---|
+| CLI (`lab-06.md`) | A mano | A mano |
+| Python | `python s3/s3_demo.py` | incluido |
+| **OpenTofu** | `cd s3/iac && tofu apply` | `python s3/s3_demo.py --skip-infra` |
+
+El script Python **se preserva**. OpenTofu declara el estado deseado del lake; el demo sigue para pedagogía (AssumeRole, versiones, presign) que no conviene meter en el state.
+
 Helper PowerShell (sesión):
 
 ```powershell
@@ -54,11 +64,17 @@ $MINIO = "aws --endpoint-url http://localhost:9000 --region us-east-1"
 
 ```bash
 awslocal iam get-role --role-name app-role --query "Role.Arn"
+awslocal iam get-role --role-name db-role --query "Role.Arn"
 minio s3 ls
 # --- LocalStack S3 (NO usar en el TP) ---
 # awslocal s3 ls
 ```
-
+Uso de s3api
+- s3api es el subcomando del AWS CLI que habla con S3 usando la API de bajo nivel (llamadas 1:1 a operaciones como CreateBucket, PutBucketEncryption, GetObject, etc.).
+- Hay dos formas de usar S3 desde el CLI:
+-- aws s3--> alto nivel, cómodo --> s3 ls, s3 cp, s3 mb
+-- aws s3api --> Bajo nivel, control fino --> s3api put-bucket-encryption, s3api get-bucket-versioning
+-En el lab, minio es un alias/wrapper del CLI apuntando a MinIO (--endpoint-url http://localhost:9000). Por eso ves minio s3api ...: misma API S3, contra MinIO.
 ---
 
 ## Paso 1 — Crear buckets + encryption (BPA comentado)
@@ -98,6 +114,7 @@ minio s3api put-bucket-encryption \
     "Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]
   }'
 
+# Consulta el cifrado
 minio s3api get-bucket-encryption --bucket snapshot-data-lake
 minio s3api get-bucket-encryption --bucket backup-data-lake
 minio s3api get-bucket-encryption --bucket staging-data-lake
@@ -181,6 +198,11 @@ minio s3api put-bucket-policy \
 
 minio s3api get-bucket-policy --bucket backup-data-lake --query Policy --output text | python -m json.tool
 ```
+Se adjunta una bucket policy (política basada en el recurso) a cada bucket del lake.
+Qué hace en concreto:
+- put-bucket-policy — sube un JSON por bucket (backup, snapshot, staging) que dice quién puede hacer qué sobre ese bucket.
+- get-bucket-policy — lee la policy de backup-data-lake y la imprime formateada para verificarla.
+A diferencia de las policies IAM del lab 04 (van en el usuario/rol), estas viven en el bucket. Por ejemplo, en backup-data-lake permiten a app-role y usuario2-ops leer/escribir, y a usuario1-admin administrar
 
 **Nota TP:** las policies referencian Principals IAM de LocalStack (`app-role`, etc.). MinIO **guarda** la policy (API compatible); el **enforcement cruzado** IAM LocalStack ↔ MinIO no es el de AWS. En prod (S3 real) identity + resource policy sí se evalúan juntas.
 
@@ -199,7 +221,7 @@ STS vive en LocalStack; las credenciales temporales **no** autentican MinIO. El 
 # IAM/STS — LocalStack
 awslocal sts assume-role \
   --role-arn arn:aws:iam::000000000000:role/app-role \
-  --role-session-name lab06-download \
+  --role-session-name usuario-download \
   --duration-seconds 900 \
   --query "Credentials.{AccessKeyId:AccessKeyId,Expiration:Expiration}"
 
@@ -215,7 +237,7 @@ PowerShell:
 ```powershell
 awslocal sts assume-role `
   --role-arn arn:aws:iam::000000000000:role/app-role `
-  --role-session-name lab06-download `
+  --role-session-name usuario-download `
   --duration-seconds 900 `
   --query "Credentials.{AccessKeyId:AccessKeyId,Expiration:Expiration}"
 

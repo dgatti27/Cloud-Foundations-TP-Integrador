@@ -13,14 +13,20 @@ Automatiza lab-06.md sobre:
   7. AssumeRole en LocalStack + list/get en MinIO
   8. Presigned URL (MinIO)
 
+Infra declarativa (alternativa a pasos 1–3 y 6):
+  s3/iac/  → OpenTofu contra MinIO
+  python s3/s3_demo.py --skip-infra   # solo demos 4–5, 7–8 (+ policies si faltan)
+
 LocalStack S3 queda comentado (decisión 002).
 
 Uso:
     python s3/s3_demo.py
+    python s3/s3_demo.py --skip-infra
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 from pathlib import Path
 
@@ -230,32 +236,64 @@ def summary(s3):
         )
 
 
-def main():
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Lab 06 — MinIO data lake + IAM/STS LocalStack"
+    )
+    parser.add_argument(
+        "--skip-infra",
+        action="store_true",
+        help=(
+            "No crear buckets/encryption/versioning/policies/seed "
+            "(ya aplicados con OpenTofu en s3/iac). Solo demos: "
+            "versioning mutate, AssumeRole, list/get, presign."
+        ),
+    )
+    parser.add_argument(
+        "--apply-policies",
+        action="store_true",
+        help="Con --skip-infra, igual aplica bucket policies (si el IaC no las puso).",
+    )
+    args = parser.parse_args()
+
     print("=== Lab 06 — MinIO data lake + IAM/STS LocalStack ===\n")
     print(f"  MinIO:      {ENDPOINT_MINIO}")
-    print(f"  LocalStack: {ENDPOINT_LOCALSTACK} (IAM/STS; S3 comentado)\n")
+    print(f"  LocalStack: {ENDPOINT_LOCALSTACK} (IAM/STS; S3 comentado)")
+    if args.skip_infra:
+        print("  modo:      --skip-infra (IaC = s3/iac)\n")
+    else:
+        print("  modo:      full demo (infra + demos)\n")
 
     s3 = make_s3_minio()
     # s3 = make_s3_localstack()  # NO usar en el TP
     sts = make_sts()
 
-    print("1. Buckets (MinIO)")
-    create_buckets(s3)
+    if not args.skip_infra:
+        print("1. Buckets (MinIO)")
+        create_buckets(s3)
 
-    print("\n2. Hardening (encryption; BPA N/A en MinIO)")
-    harden_buckets(s3)
+        print("\n2. Hardening (encryption; BPA N/A en MinIO)")
+        harden_buckets(s3)
 
-    print("\n3. Versioning")
-    enable_versioning(s3)
+        print("\n3. Versioning")
+        enable_versioning(s3)
 
-    print("\n4. Objeto de referencia")
-    upload_reference_object(s3)
+        print("\n4. Objeto de referencia")
+        upload_reference_object(s3)
+    else:
+        print("1–4. Infra omitida (esperada vía tofu apply en s3/iac)")
+        # Asegurar seed si el IaC no subió el objeto
+        print("\n4b. Objeto de referencia (idempotente)")
+        upload_reference_object(s3)
 
     print("\n5. Demo versioning")
     demo_versioning(s3)
 
-    print("\n6. Bucket policies")
-    apply_bucket_policies(s3)
+    if not args.skip_infra or args.apply_policies:
+        print("\n6. Bucket policies")
+        apply_bucket_policies(s3)
+    else:
+        print("\n6. Bucket policies omitidas (IaC); usá --apply-policies si hace falta")
 
     print("\n7. AssumeRole (LocalStack) + list/get (MinIO)")
     assume_role_and_list(sts, s3)
@@ -266,7 +304,8 @@ def main():
     print("\n=== Resumen final ===")
     summary(s3)
     print(f"\nListar: aws --endpoint-url {ENDPOINT_MINIO} s3 ls s3://backup-data-lake --recursive")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

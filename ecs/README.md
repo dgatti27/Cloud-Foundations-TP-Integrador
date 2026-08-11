@@ -1,9 +1,10 @@
-# ECS / Airflow ETL → Bronce (lab 09b)
+# ECS / Airflow ETL (lab 09b)
 
-Lab: [`lab-09b-tp.md`](./lab-09b-tp.md) — **solo lo ejecutable en LocalStack Hobby**.  
-Script: [`ecs_demo.py`](./ecs_demo.py) — automatiza pasos 0–4 (recomendado).
+Lab: [`lab-09b-tp.md`](./lab-09b-tp.md) — **ecosistema de cómputo** (stand-in Fargate + EFS).  
+Script demo: [`ecs_demo.py`](./ecs_demo.py) — camino A (conectividad, pasos 0–4).
 
-Arquitectura to-be: [`docs/Infraestructure_Architecture.md`](../docs/Infraestructure_Architecture.md), [`docs/Solution_Architecture.md`](../docs/Solution_Architecture.md).
+Origen ERP + código `extract/transform/load`: [`../etl/lab-extra-tp.md`](../etl/lab-extra-tp.md).  
+En **este** lab se aplican DDL Bronce y se triggerean los DAGs → bronce/gold.
 
 ## Alcance Hobby
 
@@ -11,31 +12,31 @@ Arquitectura to-be: [`docs/Infraestructure_Architecture.md`](../docs/Infraestruc
 |---|---|
 | IAM roles execution + task | `ecs create-cluster` / task definitions |
 | `efs-standin/` ≈ EFS | `efs create-file-system` |
-| Compose Airflow → `bronce` | Fargate + mount NFS |
+| Compose Airflow + DAGs grupo 1/2 | Fargate + mount NFS |
+| DDL `bronce.erp_*` + carga gold | — |
 
 ## Quick start
 
 ```powershell
-# Prereqs labs 04, 07-v2, 08-tp + compose base up
+# Prereqs: labs 04, 07-v2, 08-tp (+ lab-extra si camino ERP)
 $env:AWS_ACCESS_KEY_ID = "test"
 $env:AWS_SECRET_ACCESS_KEY = "test"
 $env:AWS_DEFAULT_REGION = "us-east-1"
 $env:PYTHONIOENCODING = "utf-8"
 
-python ecs/ecs_demo.py
+python ecs/ecs_demo.py           # camino A
+python ecs/ecs_demo.py --erp     # camino A + B (ERP en EFS)
 # UI http://localhost:8080  admin/admin
 ```
 
-ETL ERP → Bronce → Gold (lab extra): ver [`../etl/lab-extra-tp.md`](../etl/lab-extra-tp.md).
-DAGs: `etl_erp_to_bronce`, `etl_bronce_to_gold`.
+API gold (siguiente): `python lambda/lambda_demo.py`
 
 ## Archivos
 
 | Archivo | Rol |
 |---|---|
-| `lab-09b-tp.md` | Paso a paso comentado (qué / por qué) |
-| `ecs_demo.py` | Demo Python (IAM → secret → Compose → DAG → bronce) |
-| `IAM-NOTES.md` | Roles 1.1 / 1.2 |
-| `docker-compose.airflow.yaml` | Stand-in Fargate |
-| `efs-standin/` | Stand-in EFS |
-| `*_policy.json` / `trust_ecs.json` | IAM |
+| `lab-09b-tp.md` | Guía comentada (qué / por qué) |
+| `ecs_demo.py` | Demo camino A |
+| `docker-compose.airflow.yaml` | ≈ Fargate |
+| `efs-standin/dags/` | DAGs (demo + ERP + gold) |
+| `IAM-NOTES.md` / policies | Modelo IAM |

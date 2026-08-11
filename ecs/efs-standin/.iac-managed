@@ -1,0 +1,4 @@
+Managed by OpenTofu lab-09-tp (enable_ecs_api=false).
+Stand-in path ≈ EFS: ecs/efs-standin/{dags,logs}
+SG modelo NFS :2049 → sg-f190db21c358d4111
+Runtime Hobby → docker compose -f ecs/docker-compose.airflow.yaml up -d

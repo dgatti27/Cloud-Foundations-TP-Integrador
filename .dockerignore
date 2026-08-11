@@ -1,0 +1,31 @@
+# Build context exclusions — la imagen NO debe llevar secretos ni state mutable.
+.git
+.github
+.ruff_cache
+.pytest_cache
+**/__pycache__
+**/*.py[cod]
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/.terraform.tfstate.lock.info
+**/*.tfvars
+!**/*.tfvars.example
+.env
+.env.*
+!.env.example
+
+# Airflow stand-in — excluir TODO el árbol (mount en runtime). Evita symlinks Windows.
+ecs/
+
+# Docs / assets pesados no requeridos para aplicar IaC
+assets/
+docs/img/
+**/*.png
+**/*.jpg
+
+# IDE / OS
+.cursor
+.vscode
+.DS_Store
+**/Thumbs.db

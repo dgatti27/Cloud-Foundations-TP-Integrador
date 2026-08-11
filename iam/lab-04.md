@@ -45,12 +45,13 @@ Los buckets del data lake viven en **MinIO** (`s3-soporte`, puerto 9000), no en 
 IAM (usuarios/roles/policies) sigue en LocalStack (`:4566`).
 
 ```bash
-# Credenciales = MINIO_ROOT_* del compose (default minioadmin/minioadmin)
+# Credenciales para acceder a minio = MINIO_ROOT_* del compose (default minioadmin/minioadmin)
 export AWS_ACCESS_KEY_ID=minioadmin
 export AWS_SECRET_ACCESS_KEY=minioadmin
 export AWS_DEFAULT_REGION=us-east-1
 MINIO="aws --endpoint-url http://localhost:9000 --region us-east-1"
 
+#Crea los buckets
 $MINIO s3 mb s3://backup-data-raw
 $MINIO s3 mb s3://snapshot-data-raw
 $MINIO s3 mb s3://staging-data-raw
@@ -58,7 +59,7 @@ $MINIO s3 mb s3://staging-data-raw
 $MINIO s3 ls
 ```
 
-En PowerShell:
+Versió PowerShell:
 
 ```powershell
 $env:AWS_ACCESS_KEY_ID = "minioadmin"
@@ -96,7 +97,7 @@ awslocal iam create-policy --policy-name S3AdminTP --policy-document file://iam/
 
 awslocal iam create-policy --policy-name S3RWTP --policy-document file://iam/s3_readwrite_policy.json
 
-# adjuntar al grupo
+# adjuntar al grupo - ASociar las políticas con el grupo
 awslocal iam attach-group-policy --group-name bi-ops --policy-arn arn:aws:iam::000000000000:policy/S3RWTP
 
 awslocal iam attach-group-policy --group-name bi-admin --policy-arn arn:aws:iam::000000000000:policy/S3AdminTP
@@ -135,7 +136,7 @@ dan acceso indefinido.
 
 ---
 
-## Paso 6 — Crear rol con trust policy para EC2
+## Paso 6 — Crear rol con trust policy para ECS y RDS. (identidad para servicios) en lugar de usuarios con access keys fijas.
 
 ```bash
 awslocal iam create-role --role-name app-role --assume-role-policy-document file://iam/trust_policy_ecs.json
@@ -147,10 +148,20 @@ awslocal iam create-role --role-name db-role --assume-role-policy-document file:
 awslocal iam put-role-policy --role-name db-role --policy-name InlineS3Read --policy-document file://iam/s3_readwrite_policy.json
 
 awslocal iam get-role --role-name app-role
-```
 
-Revisá `iam/trust_policy.json`: el `Principal` es `ec2.amazonaws.com`.
-Eso significa que solo una instancia EC2 (o en LocalStack, cualquier caller)
+awslocal iam get-role --role-name db-role
+```
+Hace tres cosas por cada rol:
+  Crear el rol con una trust policy — quién puede asumirlo:
+      app-role → solo ecs-tasks.amazonaws.com (tareas ECS)
+      db-role → solo export.rds.amazonaws.com (export de RDS)
+  Adjuntar permisos (put-role-policy) — qué puede hacer una vez asumido: leer/escribir en los buckets S3 definidos en s3_readwrite_policy.json.
+Verificar con get-role que quedaron creados.
+
+La idea: un servicio (ECS, RDS) no usa claves permanentes de un usuario; pide a STS “actuar como este rol” y recibe credenciales temporales (eso es el Paso 7).
+
+Revisá `iam/trust_policy_ecs.json`: el `Principal` es `ecs.amazonaws.com`.
+Eso significa que solo una instancia ECS (o en LocalStack, cualquier caller)
 puede asumir este rol — no cualquier usuario.
 
 ---

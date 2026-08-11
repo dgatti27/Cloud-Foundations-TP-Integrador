@@ -1,5 +1,8 @@
 # Stand-in local del lab 09b-tp:
-# Airflow ≈ ECS Fargate; volumen ./efs-standin ≈ EFS (DAGs + logs)
+#   Airflow ≈ ECS Fargate
+#   ./efs-standin/dags  ≈ EFS access point /airflow/dags  (TODOS los DAGs viven acá)
+#   ./efs-standin/logs  ≈ EFS access point /airflow/logs
+#   ../etl              ≈ código de librería (imagen/EFS en AWS; no reemplaza el EFS de DAGs)
 #
 # Uso:
 #   docker compose -f ecs/docker-compose.airflow.yaml up -d

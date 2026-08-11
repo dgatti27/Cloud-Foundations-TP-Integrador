@@ -1,0 +1,56 @@
+# Toolbox IaC del TP — se combina con compose.yaml del emulador.
+#
+#   docker compose -f compose.yaml -f docker-compose.iac.yaml build tp-iac
+#   docker compose -f compose.yaml -f docker-compose.iac.yaml run --rm tp-iac apply
+#
+# Comparte la red del proyecto → DNS localstack-integrador / ministack-integrador / s3-soporte.
+# Monta docker.sock para que post_rds.py pueda docker exec al Postgres de MiniStack.
+# Monta iac/tp (y paths críticos) para NO perder terraform.tfstate ni overrides locales.
+
+services:
+  tp-iac:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tp-integrador-iac:latest
+    container_name: tp-integrador-iac
+    working_dir: /workspace
+    environment:
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+      LOCALSTACK_ENDPOINT: http://localstack-integrador:4566
+      # Puerto interno del container MiniStack (en el host es :4567)
+      MINISTACK_ENDPOINT: http://ministack-integrador:4566
+      MINIO_ENDPOINT: http://s3-soporte:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      TF_VAR_localstack_endpoint: http://localstack-integrador:4566
+      TF_VAR_ministack_endpoint: http://ministack-integrador:4566
+      TF_VAR_minio_endpoint: http://s3-soporte:9000
+      TF_VAR_minio_access_key: ${MINIO_ROOT_USER:-minioadmin}
+      TF_VAR_minio_secret_key: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      # Persistencia del state + HCL editable sin rebuild
+      - ./iac/tp:/workspace/iac/tp
+      # Seeds / handlers / stand-ins que el apply y demos leen del repo
+      - ./rds:/workspace/rds:ro
+      - ./lambda:/workspace/lambda:ro
+      - ./vpc:/workspace/vpc
+      - ./ecs:/workspace/ecs
+      - ./iam:/workspace/iam:ro
+      - ./s3:/workspace/s3:ro
+      - ./etl:/workspace/etl:ro
+      - ./iac/iac_demo.py:/workspace/iac/iac_demo.py:ro
+      - ./iac/docker/entrypoint.sh:/usr/local/bin/entrypoint-iac.sh:ro
+      # Docker del host → containers MiniStack RDS / Compose Airflow
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      localstack-integrador:
+        condition: service_healthy
+      ministack-integrador:
+        condition: service_healthy
+      s3-soporte:
+        condition: service_healthy
+    profiles:
+      - iac

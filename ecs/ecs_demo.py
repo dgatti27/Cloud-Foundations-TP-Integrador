@@ -35,12 +35,9 @@ Endpoints (no mezclar)
 Uso
 ---
     # Prereqs: labs 04, 07-v2, 08-tp ya corridos; compose base up.
-    python ecs/ecs_demo.py
-
-    # Solo verificar prereqs + IAM + secret (sin Compose / DAG):
+    python ecs/ecs_demo.py              # camino A (demo conectividad)
+    python ecs/ecs_demo.py --erp        # camino A + B (ERP→bronce→gold vía EFS)
     python ecs/ecs_demo.py --skip-runtime
-
-    # Apagar Airflow al final (no toca VPC/RDS):
     python ecs/ecs_demo.py --cleanup
 """
 
@@ -170,10 +167,15 @@ def check_prereqs() -> None:
     print(f"  ✓ VPC: {vpcs[0]['VpcId']}")
 
     sgs = ec2.describe_security_groups(
-        Filters=[{"Name": "group-name", "Values": ["sg-efs"]}]
+        Filters=[{"Name": "tag:Name", "Values": ["sg-efs"]}]
     )["SecurityGroups"]
     if not sgs:
-        raise SystemExit("Falta sg-efs (lab 07-v2).")
+        # Compat labs imperativos (LocalStack aceptaba GroupName sg-*)
+        sgs = ec2.describe_security_groups(
+            Filters=[{"Name": "group-name", "Values": ["sg-efs", "tp-efs"]}]
+        )["SecurityGroups"]
+    if not sgs:
+        raise SystemExit("Falta sg-efs (lab 07-v2 / OpenTofu lab-09-tp).")
     print(f"  ✓ sg-efs: {sgs[0]['GroupId']}")
 
     # Lab 08-tp — secret ETL (etl_writer) y instancia RDS real detrás de MiniStack.
@@ -275,8 +277,12 @@ def step_efs_standin() -> None:
     print("\n2. EFS stand-in — DAGs + logs compartidos")
     ec2 = client_ls("ec2")
     sgs = ec2.describe_security_groups(
-        Filters=[{"Name": "group-name", "Values": ["sg-efs"]}]
+        Filters=[{"Name": "tag:Name", "Values": ["sg-efs"]}]
     )["SecurityGroups"]
+    if not sgs:
+        sgs = ec2.describe_security_groups(
+            Filters=[{"Name": "group-name", "Values": ["sg-efs", "tp-efs"]}]
+        )["SecurityGroups"]
     print(f"  · sg-efs (diseño 07-v2, NFS to-be :2049): {sgs[0]['GroupId']}")
 
     EFS_DAGS.mkdir(parents=True, exist_ok=True)
@@ -528,6 +534,95 @@ def step_cleanup() -> None:
     print("  ✓ Airflow detenido. VPC/RDS intactos.")
 
 
+def step_erp_camino_b(container: str) -> None:
+    """
+    Camino B (lab-extra + EFS): DDL bronce.erp_* + DAGs etl_erp_to_bronce / etl_bronce_to_gold.
+
+    Los .py DEBEN estar en efs-standin/dags (contrato EFS del lab 09b).
+    """
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+
+    print("\n5. Camino B — ERP → bronce → gold (DAGs en EFS stand-in)")
+    for dag_file in (
+        EFS_DAGS / "etl_erp_to_bronce.py",
+        EFS_DAGS / "etl_bronce_to_gold.py",
+    ):
+        if not dag_file.is_file():
+            raise SystemExit(f"Falta DAG en EFS stand-in: {dag_file}")
+        print(f"  ✓ EFS dags: {dag_file.name}")
+
+    # Secret ERP (lab-extra) debe existir
+    sm = client_ms("secretsmanager")
+    try:
+        sm.describe_secret(SecretId="dw/erp")
+        print("  ✓ secret dw/erp")
+    except ClientError as e:
+        raise SystemExit(
+            "Falta dw/erp. Corré antes: python etl/etl_demo.py\n"
+            f"  {e}"
+        ) from e
+
+    from etl.load.to_cruda import ensure_bronce_erp_ddl
+
+    os.environ.setdefault("SECRETS_ENDPOINT", ENDPOINT_MINISTACK)
+    os.environ.setdefault("RDS_HOST_OVERRIDE", "localhost")
+    os.environ.setdefault("RDS_PORT_OVERRIDE", "15432")
+    ensure_bronce_erp_ddl()
+
+    for dag_id in ("etl_erp_to_bronce", "etl_bronce_to_gold"):
+        print(f"\n  → trigger {dag_id}")
+        wait_for_dag_id(container, dag_id)
+        _airflow(container, "dags", "unpause", dag_id, check=False)
+        out = _airflow(container, "dags", "trigger", dag_id, "-o", "plain", check=False)
+        m = re.search(r"(manual__\d{4}-\d{2}-\d{2}T[\d:+]+)", out)
+        if not m:
+            raise SystemExit(f"No run_id para {dag_id}:\n{out}")
+        run_id = m.group(1)
+        print(f"  · run_id={run_id}")
+        deadline = time.time() + 180
+        while time.time() < deadline:
+            states = _airflow(
+                container, "tasks", "states-for-dag-run", dag_id, run_id, check=False
+            )
+            if re.search(r"\bfailed\b", states):
+                print(states)
+                raise SystemExit(f"DAG {dag_id} falló")
+            # éxito: ninguna fila pending/running/queued y al menos un success
+            if re.search(r"\bsuccess\b", states) and not re.search(
+                r"\b(running|queued|scheduled)\b", states
+            ):
+                print(f"  ✓ {dag_id} success")
+                break
+            time.sleep(4)
+        else:
+            raise SystemExit(f"Timeout {dag_id}")
+
+    # verify counts
+    c = _rds_container()
+    for sql in (
+        "SELECT 'erp_clientes' t, count(*) FROM bronce.erp_clientes "
+        "UNION ALL SELECT 'erp_ventas', count(*) FROM bronce.erp_ventas;",
+        "SELECT 'dim_cliente' t, count(*) FROM gold.dim_cliente "
+        "UNION ALL SELECT 'fact_venta_linea', count(*) FROM gold.fact_venta_linea;",
+    ):
+        r = _run(
+            ["docker", "exec", "-i", c, "psql", "-U", "dwadmin", "-d", "dw", "-c", sql],
+            check=False,
+        )
+        print(r.stdout or r.stderr)
+
+
+def wait_for_dag_id(container: str, dag_id: str, timeout_s: int = 180) -> None:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        listing = _airflow(container, "dags", "list", check=False)
+        if dag_id in listing:
+            return
+        time.sleep(5)
+    raise SystemExit(f"Timeout: DAG {dag_id} no visible (¿está en efs-standin/dags?)")
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main() -> int:
@@ -538,6 +633,11 @@ def main() -> int:
         "--skip-runtime",
         action="store_true",
         help="Solo prereqs + IAM + EFS dirs + secret (sin Compose/DAG)",
+    )
+    parser.add_argument(
+        "--erp",
+        action="store_true",
+        help="Camino B: DDL + DAGs etl_erp_to_bronce / etl_bronce_to_gold (EFS)",
     )
     parser.add_argument(
         "--cleanup",
@@ -564,8 +664,12 @@ def main() -> int:
         wait_for_dag(container)
         run_id = step_trigger_dag(container)
         step_verify_bronce()
+        if args.erp:
+            step_erp_camino_b(container)
     else:
         print("\n(--skip-runtime: se omite Compose / trigger / verify)")
+        if args.erp:
+            print("  · --erp ignorado sin runtime (necesitás Airflow up)")
 
     step_e2e_narrative(run_id)
 
@@ -574,6 +678,8 @@ def main() -> int:
 
     print("\n=== Lab 09b OK ===")
     print("  Hobby = Compose + efs-standin; AWS real = Fargate + EFS (docs/).")
+    if args.erp:
+        print("  Camino B ERP→bronce→gold ejecutado vía DAGs en EFS.")
     return 0
 
 

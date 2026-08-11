@@ -1,6 +1,10 @@
-"""DAG grupo 2 (lab-extra-tp): bronce.erp_* → gold (dims + fact_venta_linea).
+"""DAG grupo 2 (lab 09b / camino B): bronce.erp_* → gold (dims + fact_venta_linea).
 
-Tasks alineadas a etl/extract|transform|load:
+Ubicación OBLIGATORIA: ecs/efs-standin/dags/  (≈ EFS access point /airflow/dags).
+Logs → ecs/efs-standin/logs/ (≈ EFS /airflow/logs). Mismo contrato que el resto
+del lab 09b: sin EFS compartido, scheduler y workers no verían el mismo DAG.
+
+Lógica: paquete etl/ (lab-extra). Orquestación:
   1) extract_bronce
   2) transform_to_gold
   3) load_gold

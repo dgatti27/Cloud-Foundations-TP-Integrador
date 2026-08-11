@@ -1,0 +1,169 @@
+{
+  "_comment": "Stack to-be del TP Integrador (docs/Solution_Architecture.md §7). Precios referenciales us-east-1. Budget objetivo ≤ USD 300/mes.",
+  "notes": "Alineado a labs 07-v2 (VPC/NAT/endpoints), 08-tp (RDS), 09b (Fargate+EFS), lab-api (Lambda+ALB), MinIO/S3 lake. Fuente: AWS Pricing Calculator / Solution §7.",
+  "project": "Cloud-Foundations-TP-Integrador",
+  "region": "us-east-1",
+  "budget_target_usd": 300,
+  "services": [
+    {
+      "name": "rds-postgres-maz",
+      "type": "db",
+      "unit": "hs",
+      "monthly_usage": 730,
+      "unit_price": 0.144,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "RDS PostgreSQL db.t3.medium Multi-AZ 24/7 — lab 08-tp (bronce+gold en una instancia). ~USD 105/mes. No SP/Spot."
+    },
+    {
+      "name": "rds-storage-gp3",
+      "type": "storage",
+      "unit": "GB-mes",
+      "monthly_usage": 250,
+      "unit_price": 0.115,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "250 GB gp3 (cruda+DW). Lab 08-tp AllocatedStorage."
+    },
+    {
+      "name": "rds-backup",
+      "type": "storage",
+      "unit": "GB-mes",
+      "monthly_usage": 120,
+      "unit_price": 0.095,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Backup por encima del tamaño incluido (retención 7 días)."
+    },
+    {
+      "name": "ecs-fargate-airflow",
+      "type": "compute",
+      "unit": "hs",
+      "monthly_usage": 730,
+      "unit_price": 0.0617,
+      "sp_eligible": true,
+      "spot_eligible": false,
+      "notes": "ECS Fargate Airflow ~1.25 vCPU + 2.5 GB 24/7 (lab 09b to-be). ~USD 45/mes. Candidato Compute SP. Spot no aplica a Fargate clásico estable."
+    },
+    {
+      "name": "efs-airflow",
+      "type": "storage",
+      "unit": "GB-mes",
+      "monthly_usage": 10,
+      "unit_price": 0.30,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "EFS DAGs/logs (lab 09b). Hobby usa efs-standin; en AWS real sí factura."
+    },
+    {
+      "name": "nat-gateway",
+      "type": "network",
+      "unit": "hs",
+      "monthly_usage": 730,
+      "unit_price": 0.045,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "NAT en public-alb-a (lab 07-v2). Salida ETL→orígenes. Sin descuento. Ver desafío endpoints."
+    },
+    {
+      "name": "nat-data-processed",
+      "type": "network",
+      "unit": "GB",
+      "monthly_usage": 100,
+      "unit_price": 0.045,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "~100 GB/mes procesados por NAT (extract orígenes)."
+    },
+    {
+      "name": "alb-api",
+      "type": "network",
+      "unit": "hs",
+      "monthly_usage": 730,
+      "unit_price": 0.0225,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "ALB HTTPS público (lab-api). Hobby=alb-standin gratis; AWS real factura base+LCU."
+    },
+    {
+      "name": "alb-lcu",
+      "type": "network",
+      "unit": "LCU-hs",
+      "monthly_usage": 730,
+      "unit_price": 0.008,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "~1 LCU promedio (Qlik/BI → API gold)."
+    },
+    {
+      "name": "lambda-gold-api",
+      "type": "compute",
+      "unit": "mes",
+      "monthly_usage": 1,
+      "unit_price": 4.00,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Lambda tp-gold-api ~2M inv + GB-s (lab-api). Agregado referencial."
+    },
+    {
+      "name": "s3-data-lake",
+      "type": "storage",
+      "unit": "GB-mes",
+      "monthly_usage": 150,
+      "unit_price": 0.023,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Staging/snapshot lake (MinIO en Hobby; S3 en AWS — decisión 002)."
+    },
+    {
+      "name": "s3-requests",
+      "type": "storage",
+      "unit": "k-req",
+      "monthly_usage": 500,
+      "unit_price": 0.0004,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "PUT/GET staging ETL + dumps."
+    },
+    {
+      "name": "data-egress",
+      "type": "network",
+      "unit": "GB",
+      "monthly_usage": 80,
+      "unit_price": 0.09,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Egress API→Qlik/BI (~80 GB). Primeros 100 GB free tier pueden aplicar — modelo conservador."
+    },
+    {
+      "name": "cloudwatch",
+      "type": "storage",
+      "unit": "mes",
+      "monthly_usage": 1,
+      "unit_price": 6.00,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Logs Airflow/Lambda + métricas + alarmas."
+    },
+    {
+      "name": "secrets-manager",
+      "type": "db",
+      "unit": "secret-mes",
+      "monthly_usage": 5,
+      "unit_price": 0.40,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "dw/rds-master, dw/rds-etl, dw/rds-api, dw/erp, (+1 origen). ~USD 0.40/secret/mes."
+    },
+    {
+      "name": "vpce-s3-gateway",
+      "type": "network",
+      "unit": "mes",
+      "monthly_usage": 1,
+      "unit_price": 0.00,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Gateway endpoint S3 (lab 07-v2): $0/hora. Ya en el diseño — reduce presión sobre NAT para S3."
+    }
+  ]
+}
