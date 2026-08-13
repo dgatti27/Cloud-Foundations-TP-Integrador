@@ -216,7 +216,7 @@ docker compose down
 
 ---
 
-## Relación con el lab sin Docker toolbox
+## Mismo flujo sin imagen toolbox (OpenTofu en el host)
 
 En el host, con OpenTofu instalado:
 

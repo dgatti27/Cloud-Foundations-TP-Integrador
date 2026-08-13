@@ -1,0 +1,7 @@
+result=OK
+action=destroy
+exit_code=0
+elapsed_s=78
+# apply/destroy/init: 0=OK, !=0=FAIL
+# plan: 0=no changes (OK), 2=hay diff (OK), 1=error (FAIL)
+log=tofu.log

@@ -6,7 +6,7 @@ No habla con RDS directo: delega en query_gold.query_gold (secret dw/rds-api).
 Eventos soportados:
   1) API Gateway / ALB stand-in (HTTP):
        queryStringParameters: table, columns, condition, limit
-  2) Invoke directo (lab / JSON):
+  2) Invoke directo (JSON):
        {"table": "...", "columns": "...", "condition": "...", "limit": 50}
 
 Respuesta HTTP: statusCode + headers + body JSON.
@@ -65,7 +65,7 @@ def _params_from_event(event: dict[str, Any]) -> dict[str, Any]:
 
 # ---------------------------------------------------------------------------
 # Envelope HTTP de respuesta (compatible ALB / API GW / invoke)
-# body siempre string JSON; CORS abierto para Postman/lab.
+# body siempre string JSON; CORS abierto para Postman.
 # ---------------------------------------------------------------------------
 def _response(status: int, payload: dict[str, Any]) -> dict[str, Any]:
     """Arma {statusCode, headers, body} para el runtime Lambda."""

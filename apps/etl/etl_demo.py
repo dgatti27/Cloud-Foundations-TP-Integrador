@@ -1,14 +1,14 @@
 """
-Lab extra TP — demo automatizada: origen ERP + paquete etl/.
+Demo: origen ERP + paquete etl/.
 
 Qué hace
 --------
 1) Verifica / levanta postgres-erp y cuenta filas Clientes/Productos/Ventas
 2) Publica secret dw/erp en MiniStack (JSON válido; evita bug PowerShell)
 3) (Opcional) Corre pipelines sin Airflow: ERP→bronce y bronce→gold
-4) Remite al lab 09b para orquestación EFS/Airflow (python ecs/ecs_demo.py --erp)
+4) Remite a Airflow para orquestación (python labs/ecs/ecs_demo.py --erp)
 
-La orquestación Airflow / DDL vía DAG / EFS NO se hace acá → ecs/ecs_demo.py --erp
+La orquestación Airflow / DDL vía DAG / EFS NO se hace acá → ecs_demo.py --erp
 
 Uso
 ---
@@ -108,7 +108,7 @@ def step_secret() -> None:
     sm = boto3.client("secretsmanager", endpoint_url=ENDPOINT_MS, **_CREDS)
     body = json.dumps(ERP_PAYLOAD)
     try:
-        sm.create_secret(Name=ORIGEN_SECRET, Description="Lab-extra ERP origen", SecretString=body)
+        sm.create_secret(Name=ORIGEN_SECRET, Description="ERP origen", SecretString=body)
         print(f"  ✓ {ORIGEN_SECRET} creado")
     except ClientError as e:
         code = e.response["Error"].get("Code", "")
@@ -135,11 +135,11 @@ def step_pipelines() -> None:
     n1 = run_erp_to_bronce()
     n2 = run_bronce_to_gold()
     print(f"  ✓ g1 filas={n1}  g2 upserts={n2}")
-    print("  · Para el camino oficial con EFS/Airflow: python ecs/ecs_demo.py --erp")
+    print("  · Para el camino oficial con EFS/Airflow: python labs/ecs/ecs_demo.py --erp")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Lab-extra — ERP + paquete etl/")
+    parser = argparse.ArgumentParser(description="ERP + paquete etl/")
     parser.add_argument("--skip-secret", action="store_true")
     parser.add_argument(
         "--with-pipelines",
@@ -148,7 +148,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    print("=== Lab-extra — origen ERP + paquete etl/ ===\n")
+    print("=== origen ERP + paquete etl/ ===\n")
     print(f"  MiniStack: {ENDPOINT_MS}\n")
 
     step_erp_up()
@@ -159,10 +159,10 @@ def main() -> int:
     else:
         print("\n3. Pipelines omitidos (sin --with-pipelines)")
         print("   Siguiente (orquestación EFS/Airflow):")
-        print("     python ecs/ecs_demo.py --erp")
+        print("     python labs/ecs/ecs_demo.py --erp")
 
-    print("\n=== Lab-extra OK ===")
-    print("  Origen + secret listos. Cómputo DAGs → lab 09b (ecs_demo.py --erp).")
+    print("\n=== ETL demo OK ===")
+    print("  Origen + secret listos. Cómputo DAGs → python labs/ecs/ecs_demo.py --erp")
     return 0
 
 

@@ -1,5 +1,5 @@
 # =============================================================================
-# VPC Multi-AZ del TP (lab-07-v2)
+# VPC Multi-AZ del TP
 # -----------------------------------------------------------------------------
 # Mapa CIDR:
 #   VPC 10.0.0.0/16
@@ -7,7 +7,7 @@
 #   ├── 10.0.10/24 private-rds-a  10.0.11/24 private-rds-b   → RDS
 #   └── 10.0.20/24 private-compute-a  10.0.21/24 compute-b   → ECS/Lambda/EFS
 #
-# Inventario JSON lo escribe el root module (infra/generated + labs/vpc).
+# Inventario JSON lo escribe el root module (infra/generated).
 # =============================================================================
 
 variable "project_name" { type = string }
@@ -33,7 +33,6 @@ resource "aws_vpc" "main" {
 
   tags = merge(var.tags, {
     Name = "tp-integrador-vpc"
-    Lab  = "07-v2"
   })
 }
 

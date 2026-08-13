@@ -3,8 +3,6 @@
 Plan de migración de un Datawarehouse on-host hacia AWS, emulado de forma
 reproducible con **LocalStack Hobby + MiniStack + MinIO + OpenTofu**.
 
-Basado en las convenciones del curso `cloud-foundations-lab`.
-
 ## Qué se migra
 
 - **Bronce + DW** (PostgreSQL) → **RDS PostgreSQL Multi-AZ** (una instancia, dos schemas).
@@ -30,7 +28,6 @@ Arquitectura: [`docs/`](docs/) · FinOps: [`docs/finops.md`](docs/finops.md) · 
 │   └── airflow/               # DAGs + logs (≈ EFS)
 ├── data/rds/                  # seed_tp.sql
 ├── ops/                       # pgAdmin + scripts
-├── labs/                      # labs del curso (guías/demos)
 └── test/                      # evidencia / logs de smoke + IaC
 ```
 
@@ -86,7 +83,7 @@ LOCALSTACK_AUTH_TOKEN=ls-...
 ```
 
 Sin ese valor `docker compose up` falla (`LOCALSTACK_AUTH_TOKEN:?Set …`).  
-El resto de variables tiene defaults de lab (`test`/`test`, `minioadmin`, `postgres`/`postgres`).
+El resto de variables tiene defaults locales (`test`/`test`, `minioadmin`, `postgres`/`postgres`).
 
 ## 2. Dependencias Python (host)
 
@@ -154,7 +151,7 @@ RDS MiniStack (`host.docker.internal:15432`, user `dwadmin`) aparece después de
 
 Qué crea el apply (idempotente: el 2º run no debería recrear recursos):
 
-1. IAM — roles (`app-role`, `api-role`, `ecsTaskExecutionRole`, `db-role`), grupos, users lab 04, policies  
+1. IAM — roles (`app-role`, `api-role`, `ecsTaskExecutionRole`, `db-role`), grupos, users, policies  
 2. VPC Multi-AZ + SGs + NAT (opcional) + endpoint S3 modelo  
 3. Buckets lake en MinIO + versioning + policies  
 4. CloudWatch log groups  
@@ -193,7 +190,7 @@ Defaults relevantes: `enable_ecs_api=false` (Hobby), `apply_rds_seed=true`, `cre
 
 Si LocalStack/MiniStack aún no están healthy, el apply falla (timeouts RDS/IAM). Volvé al paso 3.
 
-Si **ya existían** roles/buckets/RDS de demos o labs viejos:
+Si **ya existían** roles/buckets/RDS de corridas anteriores:
 
 ```bash
 # Limpiá emuladores (CUIDADO: -v borra volúmenes) o destruí state viejo
@@ -461,7 +458,7 @@ No apliques IaC fuera de [`infra/`](infra/).
 |---------|-----------|
 | `LOCALSTACK_AUTH_TOKEN` missing | `.env` en la **raíz** con el token Hobby |
 | LocalStack / MiniStack timeout | `docker compose ps` / `logs`; esperá **healthy** antes del apply |
-| `BucketAlreadyExists` / role already exists | Restos de labs/demos. `tofu destroy` o `compose down -v` y apply limpio |
+| `BucketAlreadyExists` / role already exists | Restos de corridas anteriores. `tofu destroy` o `compose down -v` y apply limpio |
 | `post_rds` no encuentra container RDS | MiniStack debe haber creado `tp-dw-db`; `docker ps --filter name=ministack-rds` |
 | Airflow no muestra DAGs | Deben estar en `apps/airflow/dags/`; logs en `apps/airflow/logs/` |
 | `InvalidAccessKeyId` en `s3 ls` | MinIO usa `minioadmin`/`minioadmin`, no `test`/`test` |
@@ -470,9 +467,3 @@ No apliques IaC fuera de [`infra/`](infra/).
 | pgAdmin no conecta a RDS | Puerto host MiniStack (`docker ps --filter name=ministack-rds`); a veces 15434 ≠ 15432 |
 | Plan con drifts eternos en SG refs | Ya mitigado en HCL (`ignore_changes`); re-aplicá una vez |
 | Symlinks Airflow / Docker build en Windows | No copies `apps/airflow/logs` al build; Compose los monta |
-
----
-
-## Labs del curso
-
-Guías y demos viven en [`labs/`](labs/). El IaC está solo en [`infra/`](infra/).

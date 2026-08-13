@@ -78,7 +78,7 @@ variable "db_allocated_storage" {
 
 variable "lake_buckets" {
   type        = list(string)
-  description = "Buckets del data lake en MinIO (lab 06 / 08-tp)."
+  description = "Buckets del data lake en MinIO."
   default     = ["backup-data-lake", "snapshot-data-lake", "staging-data-lake"]
 }
 
@@ -89,7 +89,7 @@ variable "lambda_function_name" {
 
 variable "enable_nat" {
   type        = bool
-  description = "NAT Gateway + ruta 0.0.0.0/0 en compute (lab 07-v2)."
+  description = "NAT Gateway + ruta 0.0.0.0/0 en subnets compute."
   default     = true
 }
 

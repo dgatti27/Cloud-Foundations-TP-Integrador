@@ -21,7 +21,7 @@
       "PassFile": "/tmp/pgpass.chmod"
     },
     "3": {
-      "Name": "postgres-erp (lab extra)",
+      "Name": "postgres-erp (origen ERP)",
       "Group": "TP Integrador",
       "Host": "postgres-erp",
       "Port": 5432,

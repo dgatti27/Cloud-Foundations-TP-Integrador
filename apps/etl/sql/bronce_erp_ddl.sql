@@ -1,6 +1,6 @@
--- Lab extra — tablas estructuradas en schema bronce (landing ERP)
+-- Tablas estructuradas en schema bronce (landing ERP)
 -- Se aplica sobre la RDS MiniStack (db dw). Idempotente.
--- Nota: el schema bronce ya existe (lab 08-tp). No hacemos CREATE SCHEMA
+-- Nota: el schema bronce ya existe (seed RDS). No hacemos CREATE SCHEMA
 -- aquí: etl_writer tiene CREATE sobre el schema, no CREATE sobre la database.
 
 CREATE TABLE IF NOT EXISTS bronce.ingest_batch (

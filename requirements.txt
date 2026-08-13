@@ -9,7 +9,7 @@ awscli-local>=0.22.0
 localstack-client
 python-dotenv>=1.0.0
 
-# Datos / ETL / labs
+# Datos / ETL
 psycopg2-binary>=2.9.0
 duckdb>=0.10.0
 kafka-python>=2.0.0

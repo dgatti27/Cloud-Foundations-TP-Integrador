@@ -37,7 +37,7 @@ _VENTAS_COLS = [
 
 
 def ensure_bronce_erp_ddl() -> None:
-    """Paso 3 del lab-extra: crea tablas ERP en bronce si no existen."""
+    """Crea tablas ERP en bronce si no existen."""
     sql = DDL_PATH.read_text(encoding="utf-8")
     conn = connect(rds_etl_conn())
     try:
@@ -68,10 +68,10 @@ def _upsert(conn, table: str, cols: list[str], rows: list[dict[str, Any]], pk: s
 
 
 def load_to_cruda(records: list[dict[str, Any]], origen: str) -> int:
-    """Compat API vieja: espera lista normalize_records (payload). No usar en lab-extra."""
+    """Compat API vieja: espera lista normalize_records (payload). Preferir load_erp_to_bronce."""
     print(
         f"[load->cruda] API legacy origen={origen} filas={len(records)} "
-        "(lab-extra usa load_erp_to_bronce)"
+        "(usar load_erp_to_bronce)"
     )
     return len(records)
 

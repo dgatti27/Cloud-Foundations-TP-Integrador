@@ -1,4 +1,4 @@
-"""Configuración de conexiones del ETL (lab-extra + labs 08/09b).
+"""Configuración de conexiones del ETL.
 
 Prioridad de credenciales
 -------------------------
@@ -49,7 +49,7 @@ def source_conn(origen: str) -> dict:
         return {"dsn": os.environ[env_key]}
 
     secret_name = os.environ.get("ORIGEN_SECRET") or f"dw/{origen.split('-')[0]}"
-    # erp-foxpro → dw/erp (lab-extra); override explícito con ORIGEN_SECRET
+    # erp-foxpro → dw/erp; override explícito con ORIGEN_SECRET
     if origen.startswith("erp"):
         secret_name = os.environ.get("ERP_SECRET", os.environ.get("ORIGEN_SECRET", "dw/erp"))
 
@@ -60,7 +60,7 @@ def source_conn(origen: str) -> dict:
 
 
 def rds_etl_conn() -> dict:
-    """Credencial etl_writer (lab 08-tp) para escribir bronce / gold."""
+    """Credencial etl_writer para escribir bronce / gold."""
     if os.environ.get("DW_CRUDA_CONN"):
         return {"dsn": os.environ["DW_CRUDA_CONN"]}
     if os.environ.get("DW_DW_CONN") and not os.environ.get("SECRETS_ENDPOINT"):
@@ -71,7 +71,7 @@ def rds_etl_conn() -> dict:
     if os.environ.get("USE_SECRETS_MANAGER") == "1" or os.environ.get("SECRETS_ENDPOINT"):
         data = from_secrets(secret)
         # Desde Airflow/host el endpoint del secret es IP Docker interna;
-        # override a host.docker.internal:15432 (compose lab 09b).
+        # override a host.docker.internal:15432 (Compose / host).
         data["host"] = os.environ.get("RDS_HOST_OVERRIDE", data.get("host"))
         data["port"] = int(os.environ.get("RDS_PORT_OVERRIDE", data.get("port", 5432)))
         return data
@@ -86,7 +86,7 @@ def rds_etl_conn() -> dict:
 
 
 def cruda_dsn() -> str:
-    """Compat lab viejo: DSN hacia capa cruda (= bronce en el TP)."""
+    """DSN hacia capa cruda (= bronce)."""
     return os.environ.get(
         "DW_CRUDA_CONN",
         "postgresql://etl_writer:CHANGE_ME@localhost:15432/dw",
@@ -94,7 +94,7 @@ def cruda_dsn() -> str:
 
 
 def dw_dsn() -> str:
-    """Compat lab viejo: DSN hacia gold/DW."""
+    """DSN hacia gold/DW."""
     return os.environ.get(
         "DW_DW_CONN",
         "postgresql://etl_writer:CHANGE_ME@localhost:15432/dw",

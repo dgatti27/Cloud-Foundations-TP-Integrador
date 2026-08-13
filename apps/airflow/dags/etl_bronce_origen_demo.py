@@ -1,6 +1,6 @@
 """DAG ETL grupo 1: origen demo -> schema bronce (tp-dw-db).
 
-Stand-in del lab 09b-tp. En AWS real corre como task Fargate con el mismo
+Stand-in Hobby de Fargate+EFS. En AWS real corre como task Fargate con el mismo
 código, montando EFS en /opt/airflow/dags y leyendo secrets con app-role.
 """
 from __future__ import annotations

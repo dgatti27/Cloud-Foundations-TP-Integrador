@@ -10,7 +10,7 @@ WARN=0
 pass() { echo "OK   $1"; OK=$((OK+1)); }
 warn() { echo "WARN $1"; WARN=$((WARN+1)); }
 
-echo "== cloud-foundations-lab checks =="
+echo "== TP Integrador checks =="
 echo
 
 # Compose
@@ -58,7 +58,7 @@ fi
 
 # Archivos procesados
 [ -f data/processed/signups.json ] && pass "data/processed/signups.json existe" || warn "signups.json no existe; ejecuta: python scripts/process_events.py"
-[ -f data/processed/sales_by_country.csv ] && pass "data/processed/sales_by_country.csv existe" || warn "sales_by_country.csv no existe; ver labs/02-storage.md"
+[ -f data/processed/sales_by_country.csv ] && pass "data/processed/sales_by_country.csv existe" || warn "sales_by_country.csv no existe"
 
 # Documentacion
 [ -f docs/architecture.md ] && pass "docs/architecture.md existe" || warn "docs/architecture.md no existe; ejecuta bootstrap.sh"

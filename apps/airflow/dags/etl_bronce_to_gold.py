@@ -1,10 +1,10 @@
-"""DAG grupo 2 (lab 09b / camino B): bronce.erp_* → gold (dims + fact_venta_linea).
+"""DAG grupo 2 (camino B): bronce.erp_* → gold (dims + fact_venta_linea).
 
 Ubicación OBLIGATORIA: apps/airflow/dags/  (≈ EFS access point /airflow/dags).
 Logs → apps/airflow/logs/ (≈ EFS /airflow/logs). Mismo contrato que el resto
-del lab 09b: sin EFS compartido, scheduler y workers no verían el mismo DAG.
+del stand-in EFS: sin mount compartido, scheduler y workers no verían el mismo DAG.
 
-Lógica: paquete etl/ (lab-extra). Orquestación:
+Lógica: paquete etl/. Orquestación:
   1) extract_bronce
   2) transform_to_gold
   3) load_gold

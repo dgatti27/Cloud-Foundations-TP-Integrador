@@ -1,5 +1,5 @@
 # =============================================================================
-# FinOps (lab 10-TP) — Budget AWS opcional + inventario local
+# FinOps — Budget AWS opcional + inventario local
 # -----------------------------------------------------------------------------
 # Hobby (create_budget=false, default): solo inventario JSON. LocalStack no
 # implementa Budgets API de forma usable; la estimación es pricing.py.

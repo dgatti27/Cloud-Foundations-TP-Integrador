@@ -1,0 +1,6 @@
+TP Integrador â€” corrida IaC (OpenTofu)
+action=destroy
+args=destroy -no-color -input=false -auto-approve
+fecha_local=2026-08-13 01:06:20 -03:00
+host=SFNOT96
+cwd=C:\Users\sopor\OneDrive\Documents\GitHub\Cloud-Foundations-TP-Integrador\infra

@@ -1,5 +1,5 @@
 # =============================================================================
-# ECS / EFS del TP (lab 09b)
+# ECS / EFS del TP
 # -----------------------------------------------------------------------------
 # Hobby (enable_ecs_api=false, default): LocalStack no expone APIs ecs/efs.
 #   → marcador apps/airflow/.iac-managed + inventario JSON.

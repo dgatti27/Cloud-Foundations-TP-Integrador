@@ -5,7 +5,7 @@
 #   1) Trust documents (quién puede sts:AssumeRole)
 #   2) Roles de servicio: app-role (ECS task), db-role (RDS export),
 #      ecsTaskExecutionRole (agente ECS), api-role (Lambda)
-#   3) Grupos: bi-ops / bi-admin (S3 lab 04) + bi-api / bi-ops (invoke Lambda)
+#   3) Grupos: bi-ops / bi-admin (S3) + bi-api / bi-ops (invoke Lambda)
 #   4) Policies customer-managed S3RWTP / S3AdminTP (JSON en policies/)
 #   5) Users usuario2-ops / usuario1-admin + membresía
 #   6) Inline policies de runtime (ETL secrets, Lambda execution, invoke)
@@ -26,7 +26,7 @@ locals {
 }
 
 # ---------------------------------------------------------------------------
-# 1) Trust — quién puede AssumeRole (mismo contenido que labs/iam/trust_*.json)
+# 1) Trust — quién puede AssumeRole (JSON en policies/)
 # ---------------------------------------------------------------------------
 data "aws_iam_policy_document" "trust_ecs" {
   statement {
@@ -93,8 +93,8 @@ resource "aws_iam_role" "api" {
 
 # ---------------------------------------------------------------------------
 # 3) Grupos
-# bi-ops / bi-admin = lab 04 (privilegio S3 vía policy administrada).
-# bi-api            = invoke Lambda gold (lab-api).
+# bi-ops / bi-admin = privilegio S3 vía policy administrada.
+# bi-api            = invoke Lambda gold.
 # bi-ops también recibe invoke (mismo grupo: ops + API).
 # ---------------------------------------------------------------------------
 resource "aws_iam_group" "bi_ops" {
@@ -113,7 +113,7 @@ resource "aws_iam_group" "bi_api" {
 }
 
 # ---------------------------------------------------------------------------
-# 4) Policies customer-managed (lab 04) — un origen de verdad: JSON en policies/
+# 4) Policies customer-managed — un origen de verdad: JSON en policies/
 # "Administrada" acá = create-policy, no AWS managed.
 # ---------------------------------------------------------------------------
 resource "aws_iam_policy" "s3_rw" {
@@ -143,7 +143,7 @@ resource "aws_iam_group_policy_attachment" "bi_admin_s3" {
 }
 
 # ---------------------------------------------------------------------------
-# 5) Users + membresía (lab 04)
+# 5) Users + membresía
 # El user no tiene policies propias: el acceso S3 viene del grupo.
 # Sin access keys → eso es demo/CLI (no IaC).
 # ---------------------------------------------------------------------------
@@ -171,7 +171,7 @@ resource "aws_iam_user_group_membership" "admin" {
 
 # ---------------------------------------------------------------------------
 # 6) Inline policies de runtime (TP)
-# Nombre InlineS3Read = mismo que lab 04 / iam_demo (put-role-policy).
+# Nombre InlineS3Read = policy inline de lectura S3 del task role.
 # ---------------------------------------------------------------------------
 resource "aws_iam_role_policy" "app_s3" {
   name = "InlineS3Read"

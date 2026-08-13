@@ -103,7 +103,7 @@ resource "aws_secretsmanager_secret_version" "api" {
 
 resource "aws_secretsmanager_secret" "origen_demo" {
   name        = "dw/origen-demo"
-  description = "Lab 09b — origen demo (postgres-bronce)"
+  description = "Origen demo (postgres-bronce)"
   tags        = var.tags
 }
 
@@ -121,7 +121,7 @@ resource "aws_secretsmanager_secret_version" "origen_demo" {
 
 resource "aws_secretsmanager_secret" "erp" {
   name        = "dw/erp"
-  description = "Lab extra — origen ERP (postgres-erp)"
+  description = "Origen ERP (postgres-erp)"
   tags        = var.tags
 }
 

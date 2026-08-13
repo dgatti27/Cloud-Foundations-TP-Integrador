@@ -18,7 +18,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     MINISTACK_ENDPOINT=http://ministack-integrador:4566 \
     MINIO_ENDPOINT=http://s3-soporte:9000 \
     TF_IN_AUTOMATION=1
-# Credenciales de lab se inyectan en runtime (compose / -e), no en la imagen.
+# Credenciales se inyectan en runtime (compose / -e), no en la imagen.
 
 # OS deps + Docker CLI (post_rds.py hace docker exec al container RDS de MiniStack)
 RUN apt-get update && apt-get install -y --no-install-recommends \

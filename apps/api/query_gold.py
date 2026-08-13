@@ -1,7 +1,7 @@
 """Consulta segura a schema gold (solo SELECT).
 
 Usado por:
-  - Lambda handler (lab-api) — runtime en LocalStack
+  - Lambda handler — runtime en LocalStack
   - Tests locales / alb-standin fallback
 
 Parámetros de la API (GET):
@@ -25,7 +25,7 @@ import re
 from typing import Any
 
 # ---------------------------------------------------------------------------
-# Allowlist de tablas gold (Modelo_DW / seed lab 08)
+# Allowlist de tablas gold (Modelo_DW / seed RDS)
 # Si no está acá → ValueError → handler responde 400. Nunca acepta bronce.*
 # ---------------------------------------------------------------------------
 GOLD_TABLES = frozenset(
@@ -67,7 +67,7 @@ _COND = re.compile(
 # Lee dw/rds-api → username/password/host/port/dbname (api_reader).
 # ---------------------------------------------------------------------------
 def _sm_client():
-    """Cliente boto3 secretsmanager (MiniStack en lab; AWS real en prod)."""
+    """Cliente boto3 secretsmanager (MiniStack en Hobby; AWS real en prod)."""
     import boto3
 
     endpoint = os.environ.get("SECRETS_ENDPOINT")

@@ -1,4 +1,4 @@
-# Tres providers AWS = tres backends locales del TP (decisión 002 / labs 07–08):
+# Tres providers AWS = tres backends locales del TP (decisión 002):
 #   localstack (:4566) → IAM, EC2/VPC, Lambda, CloudWatch, STS
 #   ministack  (:4567) → RDS + Secrets Manager (DB)
 #   minio      (:9000) → object storage S3 (data lake)

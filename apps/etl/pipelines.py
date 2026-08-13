@@ -1,4 +1,4 @@
-"""Pipelines listos para invocar desde DAGs Airflow (lab-extra-tp)."""
+"""Pipelines listos para invocar desde DAGs Airflow."""
 from __future__ import annotations
 
 from etl.extract.erp_foxpro import extract_erp_all

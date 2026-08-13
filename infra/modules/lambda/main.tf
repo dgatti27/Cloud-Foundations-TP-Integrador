@@ -1,5 +1,5 @@
 # =============================================================================
-# Lambda tp-gold-api (lab-api-TP)
+# Lambda tp-gold-api
 # -----------------------------------------------------------------------------
 # Zip lite (handler + query_gold) — sin pg8000 en el apply Hobby (idempotente:
 # no corre pip en cada plan). IAM / log group viven en modules/iam y cloudwatch.

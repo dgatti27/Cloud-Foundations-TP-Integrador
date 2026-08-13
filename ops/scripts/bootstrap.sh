@@ -28,7 +28,7 @@ fi
 if grep -qi microsoft /proc/version 2>/dev/null || [[ "$(uname -r)" == *WSL* ]]; then
   echo "INFO: entorno WSL2 detectado."
   echo "      Asegurate de que Docker Desktop tiene WSL2 integration activada."
-  echo "      Clonar el repo dentro de WSL2 (ej: ~/cloud-foundations-lab) mejora el rendimiento."
+  echo "      Clonar el repo dentro de WSL2 (no en /mnt/c) mejora el rendimiento."
 fi
 
 # Instalar dependencias Python

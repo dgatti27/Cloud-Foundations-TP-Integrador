@@ -1,4 +1,4 @@
-"""Extractor ERP → filas crudas (lab-extra-tp).
+"""Extractor ERP → filas crudas.
 
 Históricamente el origen era FoxPro/DBF. En el TP local el origen es el
 Postgres `postgres-erp` (tablas Clientes / Productos / Ventas). La firma

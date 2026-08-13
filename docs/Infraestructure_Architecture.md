@@ -35,7 +35,7 @@ Arquitectura de 3 capas dentro de una **VPC 10.0.0.0/16** en **us-east-1**:
 
 ## Mapeo local → cloud (continuidad con el repo del curso)
 
-| Local (lab) | Cloud (to-be) |
+| Local (Hobby) | Cloud (to-be) |
 |---|---|
 | MiniStack RDS (Postgres real, cruda + DW) | RDS PostgreSQL Multi-AZ (2 bases) |
 | Airflow (Docker) | ECS Fargate + EFS (sin EC2) |

@@ -1,4 +1,0 @@
-Managed by OpenTofu (enable_ecs_api=false).
-Stand-in path ≈ EFS: apps/airflow/{dags,logs}
-SG modelo NFS :2049 → sg-30d1e7da0ae9a9c06
-Runtime Hobby → docker compose up -d   # raíz: servicios airflow-*

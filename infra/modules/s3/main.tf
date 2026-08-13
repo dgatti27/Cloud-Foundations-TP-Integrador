@@ -1,5 +1,5 @@
 # =============================================================================
-# Data lake S3 (MinIO) — lab 06
+# Data lake S3 (MinIO)
 # -----------------------------------------------------------------------------
 # Orden: buckets → versioning → encryption → bucket policies (resource-based).
 # Provider en el root: aws.minio (:9000).
@@ -19,9 +19,9 @@ locals {
 }
 
 # ---------------------------------------------------------------------------
-# 1) Buckets (lab 06 paso 1)
+# 1) Buckets
 # for_each sobre el set de nombres → un recurso por bucket (idempotente).
-# force_destroy=true: tofu destroy puede borrar aunque haya objetos (solo lab).
+# force_destroy=true: tofu destroy puede borrar aunque haya objetos.
 # ---------------------------------------------------------------------------
 resource "aws_s3_bucket" "lake" {
   for_each = toset(var.bucket_names)
@@ -36,7 +36,7 @@ resource "aws_s3_bucket" "lake" {
 }
 
 # ---------------------------------------------------------------------------
-# 2) Versioning (lab 06 paso 2) — activar ANTES de subir data real.
+# 2) Versioning — activar ANTES de subir data real.
 # ---------------------------------------------------------------------------
 resource "aws_s3_bucket_versioning" "lake" {
   for_each = aws_s3_bucket.lake
@@ -49,7 +49,7 @@ resource "aws_s3_bucket_versioning" "lake" {
 }
 
 # ---------------------------------------------------------------------------
-# 3) Encryption SSE-S3 (lab 06 paso 1)
+# 3) Encryption SSE-S3
 # AES256 = cifrado del lado servidor. PutPublicAccessBlock omitido (MinIO).
 # ---------------------------------------------------------------------------
 resource "aws_s3_bucket_server_side_encryption_configuration" "lake" {
@@ -65,7 +65,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "lake" {
 }
 
 # ---------------------------------------------------------------------------
-# 4) Bucket policies (lab 06 paso 5) — resource-based
+# 4) Bucket policies — resource-based
 # Principals = ARNs IAM LocalStack (app-role, usuario2-ops, usuario1-admin).
 # MinIO persiste la policy; el enforcement IAM×MinIO no es el de AWS real.
 # ---------------------------------------------------------------------------

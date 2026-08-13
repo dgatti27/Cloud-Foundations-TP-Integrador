@@ -1,15 +1,15 @@
-# Lab extra TP — Origen ERP + paquete `etl/` (lógica de negocio)
+# Origen ERP + paquete `etl/` (lógica de negocio)
 
 <!--
-  Frontera de este lab vs lab 09b
-  ────────────────────────────────
-  ESTE LAB (etl/):  el ORIGEN y el CÓDIGO que transforma datos.
+  Frontera: origen + código vs cómputo
+  ────────────────────────────────────
+  ESTE PAQUETE (etl/):  el ORIGEN y el CÓDIGO que transforma datos.
     - Postgres ERP (Clientes / Productos / Ventas)
     - Seed ficticio
     - Secret dw/erp (credencial del origen)
     - Módulos extract / transform / load (qué hace cada uno y por qué)
 
-  LAB 09b (ecs/):   el ECOSISTEMA DE CÓMPUTO (stand-in Fargate + EFS).
+  CÓMPUTO (Airflow ≈ Fargate + EFS):
     - IAM execution/task role, compose Airflow, efs-standin
     - DDL de tablas en schema bronce (landing)
     - Trigger de DAGs → bronce y → gold
@@ -18,15 +18,15 @@
   Por qué separar:
     En el to-be, el origen ERP vive fuera de AWS (o en otra VPC) y el código
     ETL es un artefacto versionado. ECS/Fargate solo ORQUESTA. Mezclar ambas
-    cosas en un solo lab confunde “dato de origen” con “plataforma de cómputo”.
+    cosas confunde “dato de origen” con “plataforma de cómputo”.
 -->
 
 Extiende el TP con un **origen ERP real** (Postgres en Docker) y el paquete
 Python que los DAGs de Airflow importan. La ejecución en Airflow / DDL Bronce /
-carga Gold está en [`../../labs/ecs/lab-09b-tp.md`](../../labs/ecs/lab-09b-tp.md).
+carga Gold está en [`../airflow/dags/`](../airflow/dags/) (`python labs/ecs/ecs_demo.py --erp`).
 
 ```text
-┌─ ESTE LAB (etl/) ─────────────────────┐     ┌─ LAB 09b (ecs/) ──────────────────┐
+┌─ ORIGEN + CÓDIGO (etl/) ──────────────┐     ┌─ CÓMPUTO (Airflow ≈ Fargate) ──────┐
 │  postgres-erp                         │     │  Airflow ≈ Fargate                 │
 │  seed Clientes/Productos/Ventas       │────►│  DDL bronce.erp_*                   │
 │  secret dw/erp                        │     │  DAG etl_erp_to_bronce → bronce    │
@@ -34,10 +34,10 @@ carga Gold está en [`../../labs/ecs/lab-09b-tp.md`](../../labs/ecs/lab-09b-tp.m
 └───────────────────────────────────────┘     └────────────────────────────────────┘
 ```
 
-> **Por qué este lab**  
-> Sin un origen con tablas y filas reales, el lab 09b solo puede demo de
+> **Por qué este paquete**  
+> Sin un origen con tablas y filas reales, Airflow solo puede demo de
 > conectividad (`etl_bronce_origen_demo`). Acá nace el dataset ERP y el
-> código reutilizable; 09b lo orquesta como haría ECS.
+> código reutilizable; el stand-in ECS lo orquesta como haría Fargate.
 
 ---
 
@@ -52,11 +52,11 @@ $env:PYTHONIOENCODING = "utf-8"
 python apps/etl/etl_demo.py
 # Opcional (escribe RDS sin Airflow):
 #   python apps/etl/etl_demo.py --with-pipelines
-# Orquestación EFS/Airflow (lab 09b):
-#   python ecs/ecs_demo.py --erp
+# Orquestación EFS/Airflow:
+#   python labs/ecs/ecs_demo.py --erp
 ```
 
-`etl_demo.py` automatiza Pasos 1–2 (ERP + secret). Los DAGs viven en lab 09b.
+`etl_demo.py` automatiza Pasos 1–2 (ERP + secret). Los DAGs viven en `apps/airflow/dags/`.
 
 ---
 
@@ -69,8 +69,8 @@ python apps/etl/etl_demo.py
 -->
 
 **Qué hace:** crea el servicio `postgres-erp` (DB `erp`) e inicializa tablas.  
-**Para qué:** tener un origen estable que Airflow (lab 09b) pueda consultar.  
-**Por qué no va en 09b:** no es cómputo ECS; es el sistema fuente.
+**Para qué:** tener un origen estable que Airflow pueda consultar.  
+**Por qué no va en ECS:** no es cómputo Fargate; es el sistema fuente.
 
 Seed: [`erp/seed_erp.sql`](./erp/seed_erp.sql) — ≥10 columnas y ≥12 filas por tabla.
 Se monta en `docker-entrypoint-initdb.d` (solo en el **primer** arranque del volumen).
@@ -117,12 +117,12 @@ Get-Content etl\erp\seed_erp.sql -Raw | docker exec -i postgres-erp psql -U post
 <!--
   Qué: JSON en MiniStack Secrets Manager con host/user/password del ERP.
   Por qué: mismo patrón to-be (Fargate lee secrets; no hardcode en la imagen).
-  Dónde se CONSUME: lab 09b (env ERP_SECRET en el compose Airflow).
+  Dónde se CONSUME: env ERP_SECRET en el compose Airflow.
 -->
 
 **Qué hace:** publica `dw/erp` en MiniStack (`:4567`).  
 **Para qué:** que el extract del paquete `etl/` (y luego el DAG) obtenga la conexión sin passwords en el código.  
-**Por qué en este lab:** el secreto describe el **origen**; 09b solo lo referencia.
+**Por qué acá:** el secreto describe el **origen**; Airflow solo lo referencia.
 
 ```powershell
 # JSON válido vía archivo (ConvertTo-Json en PowerShell suele romper comillas)
@@ -156,11 +156,11 @@ aws --endpoint-url http://localhost:4567 secretsmanager describe-secret `
   La lógica vive FUERA de los DAGs a propósito:
   - testeable sin Airflow
   - misma librería en Fargate real
-  - DAGs = orquestación fina (lab 09b)
+  - DAGs = orquestación fina
 -->
 
 **Qué hace:** implementa extract → transform → load de los dos grupos ETL.  
-**Para qué:** los DAGs de 09b solo importan y llaman; no duplican SQL/negocio.  
+**Para qué:** los DAGs solo importan y llaman; no duplican SQL/negocio.  
 **Por qué dos grupos:** Solution §4–5 — grupo 1 aterriza crudo en Bronce; grupo 2 modela Gold.
 
 ### Grupo 1 — ERP → Bronce (landing)
@@ -169,23 +169,23 @@ aws --endpoint-url http://localhost:4567 secretsmanager describe-secret `
 |---|---|---|
 | [`extract/erp_foxpro.py`](./extract/erp_foxpro.py) | `SELECT *` de Clientes/Productos/Ventas vía `dw/erp` | Nombre histórico “foxpro”; en el TP el origen es Postgres ERP |
 | [`transform/normalize.py`](./transform/normalize.py) | Strip, metadatos `_origen` / `_tabla` | Limpieza ligera **sin** modelar el DW (eso es grupo 2) |
-| [`load/to_cruda.py`](./load/to_cruda.py) | UPSERT a `bronce.erp_*` + `ingest_batch` | “Cruda” = schema bronce del lab 08; nombre legacy del paquete |
+| [`load/to_cruda.py`](./load/to_cruda.py) | UPSERT a `bronce.erp_*` + `ingest_batch` | “Cruda” = schema bronce (seed RDS); nombre legacy del paquete |
 | [`config.py`](./config.py) / [`db.py`](./db.py) | Secrets + `psycopg2` | Un solo lugar para endpoints MiniStack / overrides RDS |
 
 Pipeline atajo: [`pipelines.py`](./pipelines.py) → `run_erp_to_bronce()`  
-(útil para test local; en producción lo dispara el DAG de 09b).
+(útil para test local; en producción lo dispara el DAG).
 
 ### Grupo 2 — Bronce → Gold (dimensional)
 
 | Módulo | Qué hace | Por qué |
 |---|---|---|
 | [`extract/from_bronce.py`](./extract/from_bronce.py) | Lee `bronce.erp_*` con `dw/rds-etl` | El grupo 2 **no** vuelve al ERP; lee el landing |
-| [`transform/to_gold.py`](./transform/to_gold.py) | Arma dims + `fact_venta_linea` | Mapeo al Modelo_DW (seed lab 08) |
+| [`transform/to_gold.py`](./transform/to_gold.py) | Arma dims + `fact_venta_linea` | Mapeo al Modelo_DW (seed RDS) |
 | [`load/to_dw.py`](./load/to_dw.py) | UPSERT en `gold.*` | Cierra analytics; Lambda solo lee gold |
 
 Pipeline atajo: `run_bronce_to_gold()`.
 
-### Mapeo conceptual (lo ejecuta 09b)
+### Mapeo conceptual (lo ejecuta Airflow)
 
 | Bronce | Gold |
 |---|---|
@@ -193,7 +193,7 @@ Pipeline atajo: `run_bronce_to_gold()`.
 | `erp_productos` | `dim_producto` + `dim_categoria` |
 | `erp_ventas` | `fact_venta_linea` + dims fecha/canal/pago/moneda |
 
-SKs del lab = IDs del ERP (trazable). En prod: surrogates + SCD2 reales.
+SKs del TP = IDs del ERP (trazable). En prod: surrogates + SCD2 reales.
 
 ---
 
@@ -202,7 +202,7 @@ SKs del lab = IDs del ERP (trazable). En prod: surrogates + SCD2 reales.
 <!--
   Qué: validar extract/load en tu máquina antes de meter orquestación.
   Por qué: fallos de SQL/secret se detectan más rápido que vía UI de Airflow.
-  Importante: esto NO reemplaza el lab 09b; solo prueba la librería.
+  Importante: esto NO reemplaza la orquestación; solo prueba la librería.
 -->
 
 **Qué hace:** corre los pipelines en proceso local.  
@@ -220,35 +220,35 @@ python -c "from etl.pipelines import run_erp_to_bronce, run_bronce_to_gold; prin
 ```
 
 > Si vas por el camino “oficial” del TP: **no hace falta este paso**.  
-> Seguí en lab 09b (DDL + DAGs).
+> Seguí con DDL + DAGs (`python labs/ecs/ecs_demo.py --erp`).
 
 ---
 
-## Siguiente: lab 09b (ecosistema ECS + EFS)
+## Siguiente: ecosistema ECS + EFS (Airflow)
 
 Todo lo que sigue es **cómputo / orquestación** sobre el stand-in Fargate+EFS:
 
-1. IAM + **EFS stand-in** (`ecs/efs-standin/{dags,logs}`) + Compose Airflow
+1. IAM + **EFS stand-in** (`apps/airflow/{dags,logs}`) + Compose Airflow
 2. Los DAGs `etl_erp_to_bronce` / `etl_bronce_to_gold` **viven en ese EFS** (no en `etl/`)
 3. Mount del paquete `etl/` como librería (`PYTHONPATH`) + env secrets
 4. **DDL** `bronce.erp_*` en la RDS
 5. Trigger de los DAGs (Airflow los lee desde el mount EFS)
-6. Verificar filas en bronce/gold **y** logs bajo `efs-standin/logs`
+6. Verificar filas en bronce/gold **y** logs bajo `apps/airflow/logs`
 
-→ Abrí [`../../labs/ecs/lab-09b-tp.md`](../../labs/ecs/lab-09b-tp.md) (Pasos 5–7 del flujo ERP, anclados a EFS).
+→ `python labs/ecs/ecs_demo.py --erp` (flujo ERP anclado a EFS).
 
 ---
 
-## Checkpoint (solo este lab)
+## Checkpoint (solo origen + código)
 
 - [ ] `postgres-erp` up; counts Clientes/Productos/Ventas OK
 - [ ] Secret `dw/erp` existe en MiniStack
 - [ ] Entendés qué hace cada módulo de `extract` / `transform` / `load` y por qué hay dos grupos
-- [ ] Claro: **origen + código acá; Airflow/DDL/DAGs en 09b**
+- [ ] Claro: **origen + código acá; Airflow/DDL/DAGs en el stand-in ECS**
 
 ---
 
-## Archivos de este lab
+## Archivos de este paquete
 
 | Ruta | Rol | Por qué está acá |
 |---|---|---|
@@ -257,18 +257,18 @@ Todo lo que sigue es **cómputo / orquestación** sobre el stand-in Fargate+EFS:
 | `erp/seed_erp.sql` | Datos ERP | Pertenece al origen |
 | `extract/*.py`, `transform/*.py`, `load/*.py` | Código ETL | Artefacto de negocio |
 | `pipelines.py`, `config.py`, `db.py` | Glue del paquete | Sin orquestador |
-| `sql/bronce_erp_ddl.sql` | DDL landing | **Archivo vive en etl/** (SQL de datos); **se aplica en lab 09b** |
+| `sql/bronce_erp_ddl.sql` | DDL landing | **Archivo vive en etl/** (SQL de datos); **se aplica en Airflow** |
 | `compose.yaml` → `postgres-erp` | Contenedor origen | No es Fargate |
 
-DAGs y compose Airflow: ver carpeta `ecs/`.
+DAGs y compose Airflow: ver `apps/airflow/` y `python labs/ecs/ecs_demo.py`.
 
 ---
 
-## Relación con labs / docs
+## Relación con docs
 
 | Fuente | Aporte |
 |---|---|
 | Solution §4–5 | Grupo 1 (origen→Bronce) y grupo 2 (Bronce→Gold) |
-| 08-tp | Destino RDS `dw` (schemas ya creados) |
-| **09b** | Orquesta este paquete en el stand-in ECS |
+| RDS / seed | Destino `dw` (schemas ya creados) |
+| Airflow / ECS stand-in | Orquesta este paquete |
 | Modelo_DW (seed_tp) | Forma de las tablas gold que escribe `to_gold` / `to_dw` |

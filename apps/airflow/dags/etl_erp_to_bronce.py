@@ -1,10 +1,10 @@
-"""DAG grupo 1 (lab 09b / camino B): ERP Postgres → schema bronce.
+"""DAG grupo 1 (camino B): ERP Postgres → schema bronce.
 
 Ubicación OBLIGATORIA: apps/airflow/dags/  (≈ EFS access point /airflow/dags).
 Los logs de cada run van a apps/airflow/logs/ (≈ EFS /airflow/logs).
 No mover este archivo fuera del stand-in: scheduler y webserver solo ven ese mount.
 
-Lógica de negocio: paquete etl/ (lab-extra). Este archivo solo orquesta tasks:
+Lógica de negocio: paquete etl/. Este archivo solo orquesta tasks:
   1) ensure_bronce_ddl
   2) extract_erp
   3) transform_normalize

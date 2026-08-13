@@ -15,7 +15,7 @@ Este documento cubre dos planos que no hay que mezclar:
 
 El techo SMART del TP (≤ 300) aplica al **to-be**, no al emulador.
 
-Workbook de lab (preguntas): [`labs/finops/estimate.md`](../labs/finops/estimate.md).  
+Workbook de estimación: [`labs/finops/estimate.md`](../labs/finops/estimate.md).  
 Decisiones: [`decisions.md`](decisions.md).  
 Arquitectura §7: [`Solution_Architecture.md`](Solution_Architecture.md).
 
@@ -83,7 +83,7 @@ Spot no aplica a este stack (RDS/NAT/ALB/Fargate estable). El único `sp_eligibl
 | ALB | stand-in `:8088` | ALB + LCU |
 | Budget 300 / alertas 80–100 | JSON inventario local | AWS Budgets (`create_budget=true`) |
 
-`create_budget=false` a propósito: LocalStack Hobby **no** implementa Budgets usable. Estimación = `pricing.py`; Budget se crea en AWS real / Learner Lab.
+`create_budget=false` a propósito: LocalStack Hobby **no** implementa Budgets usable. Estimación = `pricing.py`; Budget se crea en AWS real.
 
 ---
 
@@ -130,7 +130,7 @@ Ninguna bloquea IAM / VPC / S3 / RDS / Lambda **existir** ni UIs (Airflow, ALB h
 | Hallazgo | ¿Crítico para levantar? | ¿Crítico para usar? | Acción |
 |----------|-------------------------|---------------------|--------|
 | pgAdmin `admin@tp.local` + `chown` no-root | **Sí** (pgAdmin exit 1) | Login UI | **Ajustado:** email `admin@example.com`, `user: root` en Compose |
-| Contenedores huérfanos (`alb-standin`, Airflow lab ECS en `:8080`) | Sí en *esta* máquina | Puertos | Operativo: `docker rm` / parar compose viejo. No es bug del HCL |
+| Contenedores huérfanos (`alb-standin`, Airflow viejo en `:8080`) | Sí en *esta* máquina | Puertos | Operativo: `docker rm` / parar compose viejo. No es bug del HCL |
 | Zip Lambda **sin `pg8000`** | No | **Sí** para `GET /gold/query` (500) | **No ajustado ahora** — decisión 006. Health ALB OK. Se arma cuando se pule ETL/API |
 | Puerto RDS host 15434 ≠ 15432 | No | pgAdmin / override Lambda→RDS | **No crítico** hasta que haya driver. MiniStack asigna puerto dinámico. Override: `TF_VAR_rds_port_override` + `docker ps --filter name=ministack-rds` |
 | MinIO + `test`/`test` → `InvalidAccessKeyId` | No | `aws s3 ls` | Docs: usar `minioadmin`. No es fallo de buckets |
@@ -154,7 +154,7 @@ Comandos: README §5.
 ## 4. Red de seguridad (cuando pase a AWS real)
 
 - [ ] `notify.json` / `finops_notify_email` con mail real  
-- [ ] `tofu apply` con `create_budget=true` (Learner Lab / cuenta AWS)  
+- [ ] `tofu apply` con `create_budget=true` (cuenta AWS real)  
 - [ ] Alertas 80% ACTUAL y 100% FORECASTED  
 - [ ] Revisar NAT GB reales vs modelo 100 GB  
 

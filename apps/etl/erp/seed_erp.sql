@@ -1,4 +1,4 @@
--- Lab extra TP — base ERP (origen grupo 1)
+-- Base ERP (origen grupo 1)
 -- Tablas: Clientes, Productos, Ventas (≥10 columnas, ≥10 filas cada una)
 
 CREATE TABLE IF NOT EXISTS "Clientes" (

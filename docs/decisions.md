@@ -14,18 +14,18 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 
 **Alternativas:**
 
-1. Cuenta AWS real / Learner Lab para todo el ciclo.  
+1. Cuenta AWS real para todo el ciclo.  
 2. Solo scripts Python/boto3 contra emuladores (sin IaC).  
 3. **Emuladores + un solo árbol IaC** (elegida).
 
 **Tradeoff:**
 
-- (+) Costo AWS del lab ≈ **USD 0**; el to-be se **estima** (FinOps) en **275,78 USD/mes** OD.  
+- (+) Costo AWS del entorno local ≈ **USD 0**; el to-be se **estima** (FinOps) en **275,78 USD/mes** OD.  
 - (+) Reproduce IAM, VPC, S3, RDS, Secrets, Lambda, logs.  
 - (−) Hobby **no** trae ECS, EFS, ELBv2 ni Budgets → hay que *stand-inear* (decisión 003).  
 - (−) Tres backends (4566 / 4567 / 9000): hay que no mezclar endpoints.
 
-**Resultado:** `docker compose up -d` + `cd infra && tofu apply`. Budget AWS solo cuando `create_budget=true` en cuenta real. Estimación siempre local (`labs/finops/pricing.py`).
+**Resultado:** `docker compose up -d` + `cd infra && tofu apply`. Budget AWS solo cuando `create_budget=true` en cuenta real. Estimación siempre local (`python labs/finops/pricing.py`).
 
 ---
 
@@ -33,7 +33,7 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 
 **Decision:** usar **MinIO** (`s3-soporte`, `:9000` / consola `:9001`) como data lake / S3 del pipeline y del IaC de buckets. LocalStack queda para IAM, VPC, Lambda, Logs — **no** como storage del flujo.
 
-**Contexto:** ambos hablan API S3, pero no son el mismo producto ni el mismo rol en el lab. Políticas IAM de AWS no se aplican 1:1 sobre MinIO.
+**Contexto:** ambos hablan API S3, pero no son el mismo producto ni el mismo rol en este TP. Políticas IAM de AWS no se aplican 1:1 sobre MinIO.
 
 **Alternativas:**
 
@@ -77,36 +77,35 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 - (−) ALB stand-in no es ELB (ni WAF ni TLS terminado en AWS).  
 - (−) FinOps no crea `aws_budgets_budget` hasta AWS real.
 
-**Resultado:** `ecs_mode = hobby-standin`. `apps/airflow/` ≈ EFS. No correr `labs/*/iac` (eliminados). `create_budget=false` por defecto.
+**Resultado:** `ecs_mode = hobby-standin`. `apps/airflow/` ≈ EFS. IaC solo en `infra/`. `create_budget=false` por defecto.
 
 ---
 
 ### 004 — Una sola raíz IaC (`infra/`)
 
-**Decision:** consolidar todo el OpenTofu en [`infra/`](../infra/) + `infra/modules/{iam,vpc,s3,rds,secrets,lambda,ecs,cloudwatch,finops}`. Deprecar y **borrar** `labs/*/iac` e `iam/iac`.
+**Decision:** consolidar todo el OpenTofu en [`infra/`](../infra/) + `infra/modules/{iam,vpc,s3,rds,secrets,lambda,ecs,cloudwatch,finops}`.
 
-**Contexto:** cada lab tenía su propio state. Mismos nombres (`app-role`, `tp-dw-db`, buckets lake) → `EntityAlreadyExists` y pérdida de idempotencia si se aplicaban en paralelo.
+**Contexto:** varios árboles IaC en paralelo chocaban en nombres (`app-role`, `tp-dw-db`, buckets lake) → `EntityAlreadyExists` y pérdida de idempotencia.
 
 **Alternativas:**
 
-1. Un state por lab (`labs/*/iac`).  
-2. Workspaces / prefijos por lab.  
-3. **Un state TP** (elegida).
+1. Un state por componente suelto.  
+2. Workspaces / prefijos por componente.  
+3. **Un state del TP** (elegida).
 
 **Tradeoff:**
 
 - (+) `tofu apply` idempotente sobre el producto.  
-- (+) Comentarios y policies de labs viven en los módulos.  
-- (−) Los labs dejan de ser stacks independientes; las guías apuntan a `infra/`.  
+- (+) Policies y comentarios viven en los módulos.  
 - (−) Demos Python (`ecs_demo.py`, etc.) usan `--skip-infra` si el apply ya corrió.
 
-**Resultado:** única fuente: `cd infra && tofu apply`. Labs = guías + demos, no HCL.
+**Resultado:** única fuente IaC: `cd infra && tofu apply`.
 
 ---
 
 ### 005 — FinOps: estimar local, Budget solo en AWS real
 
-**Decision:** el costo del stack se calcula con `labs/finops/services.json` + `pricing.py` (100% local). El recurso `aws_budgets_budget` es **opt-in** (`create_budget=true` + email real).
+**Decision:** el costo del stack se calcula con `services.json` + `pricing.py` (100% local). El recurso `aws_budgets_budget` es **opt-in** (`create_budget=true` + email real).
 
 **Contexto:** techo SMART ≤ **USD 300**/mes. Hobby no factura AWS; inventar un Budget contra LocalStack no aporta señal.
 
@@ -118,8 +117,8 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 
 **Tradeoff:**
 
-- (+) Números reproducibles en CI (`labs/finops/pricing.py`).  
-- (+) Alertas 80/100 cuando importen (Learner Lab).  
+- (+) Números reproducibles en CI (`pricing.py`).  
+- (+) Alertas 80/100 cuando importen (cuenta AWS real).  
 - (−) El inventario Hobby (`finops_inventory.json`) no es un control de gasto real.
 
 **Resultado:** baseline **275,78 OD / 262,26 SP** → entra en 300 (92% / 87%). Detalle en [`finops.md`](finops.md). Gateway VPCE S3 ya en el diseño (0 USD); NAT se mantiene para orígenes on-host.
@@ -134,7 +133,7 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 
 **Alternativas:**
 
-1. `pip` + layer/zip en cada apply (lab original).  
+1. `pip` + layer/zip en cada apply.  
 2. Vendor `pg8000`+`scramp` commiteados en `apps/api/`.  
 3. **Zip lite ahora** (elegida); driver cuando se pule la API/ETL.
 
@@ -200,6 +199,6 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 
 **Alternativas:** dominio inventado `.local` (fallaba) vs TLD reservado de documentación (`example.com`).
 
-**Tradeoff:** email “de lab”, no de producción. Login simple para el TP.
+**Tradeoff:** email de entorno local, no de producción. Login simple para el TP.
 
 **Resultado:** Compose + `.env.example` + README. **Ajuste aplicado** tras el smoke test (era el único blocker de UI).

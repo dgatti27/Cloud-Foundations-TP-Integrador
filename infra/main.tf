@@ -8,7 +8,7 @@
 #          └→ FinOps inventario (Budget AWS solo si create_budget)
 #
 # Idempotencia: tofu apply N veces → sin recrear si el state coincide.
-# Labs/*/iac está deprecado: no corras esos stacks en paralelo (chocan names).
+# Un solo state: no corras otros árboles IaC en paralelo (chocan names).
 # =============================================================================
 
 resource "random_password" "master" {
@@ -207,7 +207,7 @@ module "finops" {
   tags          = local.common_tags
 }
 
-# Inventario para demos / labs (mismo shape que el viejo vpc/vpc_config.json)
+# Inventario VPC (mismo shape que vpc_config.json de referencia)
 resource "local_file" "vpc_config" {
   filename = "${path.root}/generated/vpc_config.json"
   content = jsonencode({

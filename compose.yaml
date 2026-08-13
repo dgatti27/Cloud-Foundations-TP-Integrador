@@ -13,8 +13,8 @@
 #   MinIO        :9000 / consola :9001
 #   postgres-bronce :5432 · postgres-dw :5433 · postgres-erp :5434
 #   RDS MiniStack   :15432
-#   Airflow UI      :8080  (admin / admin)     ≈ Fargate lab 09b
-#   ALB stand-in    :8088                      ≈ lab-api
+#   Airflow UI      :8080  (admin / admin)     ≈ Fargate
+#   ALB stand-in    :8088                      ≈ ALB → Lambda
 #   pgAdmin         :5050  (admin@example.com / admin)
 #
 # Toolbox OpenTofu (no arranca con up -d):
@@ -264,7 +264,7 @@ services:
         condition: service_healthy
 
   # ---------------------------------------------------------------------------
-  # pgAdmin — UI para Postgres del lab (orígenes + RDS MiniStack)
+  # pgAdmin — UI para Postgres (orígenes + RDS MiniStack)
   # Login: http://localhost:5050  →  admin@example.com / admin
   # (.local no pasa el validador de email de pgAdmin 8)
   # Servers prearmados: bronce / dw(Airflow) / erp. RDS: dwadmin + secret dw/rds-master.

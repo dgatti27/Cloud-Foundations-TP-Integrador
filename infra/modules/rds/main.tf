@@ -1,11 +1,11 @@
 # =============================================================================
-# RDS PostgreSQL Multi-AZ (lab 08-TP) — MiniStack → container Postgres
+# RDS PostgreSQL Multi-AZ — MiniStack → container Postgres
 # -----------------------------------------------------------------------------
 # Subnet group + instancia. Secrets y seed viven en el root (modules/secrets
 # + null_resource.rds_seed) para no duplicar passwords/state.
 #
 # Parámetros = to-be TP (medium, MultiAZ, encrypted, privada).
-# skip_final_snapshot: lab local — destroy sin snapshot final obligatorio.
+# skip_final_snapshot: entorno local — destroy sin snapshot final obligatorio.
 # =============================================================================
 
 variable "identifier" { type = string }
@@ -30,7 +30,7 @@ variable "tags" { type = map(string) }
 # ---------------------------------------------------------------------------
 resource "aws_db_subnet_group" "tp" {
   name        = "tp-rds-subnets"
-  description = "DB subnet group Multi-AZ — private-rds-a / private-rds-b (lab 07-v2)"
+  description = "DB subnet group Multi-AZ — private-rds-a / private-rds-b"
   subnet_ids  = var.subnet_ids
   tags        = merge(var.tags, { Name = "tp-rds-subnets" })
 }
@@ -57,7 +57,7 @@ resource "aws_db_instance" "dw" {
   skip_final_snapshot     = true
   apply_immediately       = true
 
-  tags = merge(var.tags, { Name = var.identifier, Lab = "08-tp" })
+  tags = merge(var.tags, { Name = var.identifier })
 
   # MiniStack / provider: password y max_allocated_storage generan drift inocuo.
   lifecycle {

@@ -1,11 +1,11 @@
 """Transformaciones grupo 2: bronce ERP → filas listas para dims/facts gold.
 
-Mapeo (lab-extra):
+Mapeo ERP → gold:
   bronce.erp_clientes  → gold.dim_cliente (+ dim_geografia)
   bronce.erp_productos → gold.dim_producto (+ dim_categoria)
   bronce.erp_ventas    → gold.fact_venta_linea (+ dim_fecha/canal/pago/moneda)
 
-SKs: usamos los IDs del ERP como surrogate keys (suficiente para el lab).
+SKs: usamos los IDs del ERP como surrogate keys (trazable; en prod SCD2 reales).
 """
 from __future__ import annotations
 

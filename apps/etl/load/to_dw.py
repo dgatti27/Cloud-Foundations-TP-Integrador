@@ -1,4 +1,4 @@
-"""Grupo 2 — carga dimensional en schema gold (Modelo_DW / lab 08-tp)."""
+"""Grupo 2 — carga dimensional en schema gold (Modelo_DW)."""
 from __future__ import annotations
 
 from typing import Any
