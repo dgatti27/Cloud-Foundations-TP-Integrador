@@ -29,12 +29,12 @@ python labs/ecs/ecs_demo.py           # camino A
 python labs/ecs/ecs_demo.py --erp     # camino A + B (ERP en EFS)
 
 # Opción B — OpenTofu + runtime
-cd labs/ecs/iac; tofu apply; cd ../../..
+cd infra; tofu apply; cd ..
 python labs/ecs/ecs_demo.py --skip-infra
 # UI http://localhost:8080  admin/admin
 ```
 
-API gold (siguiente): `python lambda/lambda_demo.py`
+API gold (siguiente): `docker compose up -d` → ALB stand-in `:8088`
 
 ## Archivos
 
@@ -42,7 +42,7 @@ API gold (siguiente): `python lambda/lambda_demo.py`
 |---|---|
 | `lab-09b-tp.md` | Guía comentada (qué / por qué) |
 | `ecs_demo.py` | Demo camino A (+ `--skip-infra` tras IaC) |
-| `iac/` | OpenTofu: IAM + stand-in + secret origen |
+| IaC | [`../../infra/modules/ecs`](../../infra/modules/ecs) |
 | `../../compose.yaml` (`airflow-*`) | ≈ Fargate (stack único raíz) |
 | `../../apps/airflow/dags/` | DAGs (demo + ERP + gold) |
 | `IAM-NOTES.md` / policies | Modelo IAM |

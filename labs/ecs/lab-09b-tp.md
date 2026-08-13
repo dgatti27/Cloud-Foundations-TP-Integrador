@@ -65,18 +65,18 @@ Origen ERP rico: **[`../etl/lab-extra-tp.md`](../etl/lab-extra-tp.md)** (prerequ
 
 ```powershell
 # Prereqs: docker compose base up + labs 04, 07-v2, 08-tp
-# Camino B además: python etl/etl_demo.py
+# Camino B además: python apps/etl/etl_demo.py
 $env:AWS_ACCESS_KEY_ID = "test"
 $env:AWS_SECRET_ACCESS_KEY = "test"
 $env:AWS_DEFAULT_REGION = "us-east-1"
 $env:PYTHONIOENCODING = "utf-8"
 
-python ecs/ecs_demo.py           # camino A (demo conectividad)
-python ecs/ecs_demo.py --erp     # camino A + B (ERP→bronce→gold vía EFS)
+python labs/ecs/ecs_demo.py           # camino A (demo conectividad)
+python labs/ecs/ecs_demo.py --erp     # camino A + B (ERP→bronce→gold vía EFS)
 # Flags:
-#   python ecs/ecs_demo.py --skip-infra     # tras tofu apply en ecs/iac
-#   python ecs/ecs_demo.py --skip-runtime
-#   python ecs/ecs_demo.py --cleanup
+#   python labs/ecs/ecs_demo.py --skip-infra     # tras tofu apply en infra/
+#   python labs/ecs/ecs_demo.py --skip-runtime
+#   python labs/ecs/ecs_demo.py --cleanup
 ```
 
 `ecs_demo.py` automatiza IAM, EFS stand-in, Compose, triggers y (con `--erp`) los DAGs del camino B.
@@ -85,10 +85,10 @@ python ecs/ecs_demo.py --erp     # camino A + B (ERP→bronce→gold vía EFS)
 
 | Capa | Herramienta |
 |---|---|
-| Infra (pasos 1–2 + secret origen) | `cd ecs/iac && tofu apply` |
-| Runtime (Compose / DAG / verify / `--erp`) | `python ecs/ecs_demo.py --skip-infra` |
+| Infra (pasos 1–2 + secret origen) | `cd infra && tofu apply` |
+| Runtime (Compose / DAG / verify / `--erp`) | `python labs/ecs/ecs_demo.py --skip-infra` |
 
-Detalle en `ecs/iac/README.md`. No mezcles IAM Python y OpenTofu sin limpiar.
+Detalle en [`infra/modules/ecs`](../../infra/modules/ecs).
 
 ### Opción B — Manual + camino ERP
 

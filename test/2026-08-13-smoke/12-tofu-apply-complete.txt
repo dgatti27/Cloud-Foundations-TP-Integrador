@@ -1,0 +1,59 @@
+=== tofu apply (extracto corrida 2026-08-13 ~03:48 UTC) ===
+fuente=log de la corrida OpenTofu del smoke test (ANSI stripped)
+nota=67 added, 5 changed, 2 destroyed — LocalStack recreado; MiniStack RDS/MinIO ya existian
+etl=no
+
+Apply complete! Resources: 67 added, 5 changed, 2 destroyed.
+
+Outputs:
+
+cloudwatch_log_groups = {
+  "ecs_airflow" = "/ecs/tp-airflow"
+  "etl" = "/tp-integrador/etl"
+  "lambda_api" = "/aws/lambda/tp-gold-api"
+}
+db_address = "172.18.0.8"
+db_endpoint = "172.18.0.8:5432"
+ecs_mode = "hobby-standin"
+endpoints = {
+  "localstack" = "http://localhost:4566"
+  "minio" = "http://localhost:9000"
+  "ministack" = "http://localhost:4567"
+}
+finops_inventory = "modules/finops/../../generated/finops_inventory.json"
+iam_roles = {
+  "api" = "arn:aws:iam::000000000000:role/api-role"
+  "app" = "arn:aws:iam::000000000000:role/app-role"
+  "db" = "arn:aws:iam::000000000000:role/db-role"
+  "ecs_execution" = "arn:aws:iam::000000000000:role/ecsTaskExecutionRole"
+}
+lake_buckets = {
+  "backup-data-lake" = "backup-data-lake"
+  "snapshot-data-lake" = "snapshot-data-lake"
+  "staging-data-lake" = "staging-data-lake"
+}
+lambda_function = "tp-gold-api"
+secret_names = {
+  "api" = "dw/rds-api"
+  "erp" = "dw/erp"
+  "etl" = "dw/rds-etl"
+  "master" = "dw/rds-master"
+  "origen_demo" = "dw/origen-demo"
+}
+security_groups = {
+  "alb" = "sg-e3e68e7d47e6f6270"
+  "api" = "sg-be8fd4f5cb598826a"
+  "ecs_etl" = "sg-71d636eb47417ceb0"
+  "efs" = "sg-30d1e7da0ae9a9c06"
+  "rds" = "sg-af3b310a8e0c19b51"
+}
+subnets = {
+  "compute_a" = "subnet-d80b420017b7e36f2"
+  "compute_b" = "subnet-877c07a20fdea80bb"
+  "public_a" = "subnet-0834fd07b5cf1f3e7"
+  "public_b" = "subnet-b1ddecf6251aea47e"
+  "rds_a" = "subnet-89912fdf6a80198b3"
+  "rds_b" = "subnet-b11ea4efd8ea8abbf"
+}
+vpc_config_path = "./generated/vpc_config.json"
+vpc_id = "vpc-04c5df02312204bfc"

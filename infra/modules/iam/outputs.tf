@@ -17,3 +17,11 @@ output "db_role_arn" {
 output "bi_api_group_name" {
   value = aws_iam_group.bi_api.name
 }
+
+output "bi_ops_group_name" {
+  value = aws_iam_group.bi_ops.name
+}
+
+output "bi_admin_group_name" {
+  value = aws_iam_group.bi_admin.name
+}

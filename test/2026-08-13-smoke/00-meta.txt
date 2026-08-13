@@ -1,0 +1,7 @@
+﻿TP Integrador — evidencia smoke test + IaC
+fecha_local=2026-08-13 01:01:51 -03:00
+host=SFNOT96
+os=Microsoft Windows NT 10.0.26200.0
+cwd=c:\Users\sopor\OneDrive\Documents\GitHub\Cloud-Foundations-TP-Integrador
+etl_ejecutado=false
+nota=Captura post tofu apply Hobby (LocalStack+MiniStack+MinIO). Sin secretos (no SecretString).

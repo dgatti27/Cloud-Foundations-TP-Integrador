@@ -1,0 +1,131 @@
+=== RDS MiniStack :4567 ===
+utc=2026-08-13T01:02:01.5313729-03:00
+
+{
+    "DBInstances": [
+        {
+            "DBInstanceIdentifier": "tp-dw-db",
+            "DBInstanceClass": "db.t3.medium",
+            "Engine": "postgres",
+            "DBInstanceStatus": "available",
+            "MasterUsername": "dwadmin",
+            "DBName": "dw",
+            "Endpoint": {
+                "Address": "172.18.0.8",
+                "Port": 5432,
+                "HostedZoneId": "Z2R2ITUGPM61AM"
+            },
+            "AllocatedStorage": 50,
+            "InstanceCreateTime": "2026-08-03T03:29:31.801Z",
+            "PreferredBackupWindow": "03:00-04:00",
+            "BackupRetentionPeriod": 7,
+            "DBSecurityGroups": [],
+            "VpcSecurityGroups": [
+                {
+                    "VpcSecurityGroupId": "sg-af3b310a8e0c19b51",
+                    "Status": "active"
+                }
+            ],
+            "DBParameterGroups": [
+                {
+                    "DBParameterGroupName": "default.postgres16",
+                    "ParameterApplyStatus": "in-sync"
+                }
+            ],
+            "AvailabilityZone": "us-east-1a",
+            "DBSubnetGroup": {
+                "DBSubnetGroupName": "tp-rds-subnets",
+                "DBSubnetGroupDescription": "DB subnet group Multi-AZ ÔÇö private-rds-a / private-rds-b (lab 07-v2)",
+                "VpcId": "vpc-00000000",
+                "SubnetGroupStatus": "Complete",
+                "Subnets": [
+                    {
+                        "SubnetIdentifier": "subnet-89912fdf6a80198b3",
+                        "SubnetAvailabilityZone": {
+                            "Name": "us-east-1a"
+                        },
+                        "SubnetOutpost": {},
+                        "SubnetStatus": "Active"
+                    },
+                    {
+                        "SubnetIdentifier": "subnet-b11ea4efd8ea8abbf",
+                        "SubnetAvailabilityZone": {
+                            "Name": "us-east-1a"
+                        },
+                        "SubnetOutpost": {},
+                        "SubnetStatus": "Active"
+                    }
+                ],
+                "DBSubnetGroupArn": "arn:aws:rds:us-east-1:000000000000:subgrp:tp-rds-subnets"
+            },
+            "PreferredMaintenanceWindow": "sun:05:00-sun:06:00",
+            "PendingModifiedValues": {},
+            "LatestRestorableTime": "2026-08-03T03:29:31.801Z",
+            "MultiAZ": true,
+            "EngineVersion": "16.3",
+            "AutoMinorVersionUpgrade": true,
+            "ReadReplicaSourceDBInstanceIdentifier": "",
+            "ReadReplicaDBInstanceIdentifiers": [],
+            "ReadReplicaDBClusterIdentifiers": [],
+            "ReplicaMode": "",
+            "LicenseModel": "postgresql-license",
+            "StorageThroughput": 0,
+            "OptionGroupMemberships": [
+                {
+                    "OptionGroupName": "default:postgres-16",
+                    "Status": "in-sync"
+                }
+            ],
+            "PubliclyAccessible": false,
+            "StatusInfos": [],
+            "StorageType": "gp2",
+            "DbInstancePort": 0,
+            "DBClusterIdentifier": "",
+            "StorageEncrypted": true,
+            "KmsKeyId": "",
+            "DbiResourceId": "db-8EA3CF8FBE744614951B",
+            "CACertificateIdentifier": "rds-ca-rsa2048-g1",
+            "DomainMemberships": [],
+            "CopyTagsToSnapshot": false,
+            "MonitoringInterval": 0,
+            "EnhancedMonitoringResourceArn": "",
+            "MonitoringRoleArn": "",
+            "PromotionTier": 1,
+            "DBInstanceArn": "arn:aws:rds:us-east-1:000000000000:db:tp-dw-db",
+            "IAMDatabaseAuthenticationEnabled": false,
+            "PerformanceInsightsEnabled": false,
+            "EnabledCloudwatchLogsExports": [],
+            "ProcessorFeatures": [],
+            "DeletionProtection": false,
+            "AssociatedRoles": [],
+            "MaxAllocatedStorage": 50,
+            "TagList": [
+                {
+                    "Key": "Name",
+                    "Value": "tp-dw-db"
+                },
+                {
+                    "Key": "ManagedBy",
+                    "Value": "OpenTofu"
+                },
+                {
+                    "Key": "Lab",
+                    "Value": "08-tp"
+                },
+                {
+                    "Key": "Project",
+                    "Value": "tp-integrador"
+                }
+            ],
+            "CustomerOwnedIpEnabled": false,
+            "NetworkType": "IPV4",
+            "BackupTarget": "region",
+            "CertificateDetails": {
+                "CAIdentifier": "rds-ca-rsa2048-g1",
+                "ValidTill": "2061-01-01T00:00:00Z"
+            },
+            "IsStorageConfigUpgradeAvailable": false
+        }
+    ]
+}
+

@@ -1,0 +1,18 @@
+=== docker compose ps ===
+utc=2026-08-13T01:01:53.1496941-03:00
+
+NAME                           IMAGE                             COMMAND                  SERVICE                 CREATED          STATUS                    PORTS
+airflow-scheduler-integrador   apache/airflow:2.9.3-python3.12   "/usr/bin/dumb-init ÔÇª"   airflow-scheduler       15 minutes ago   Up 15 minutes             8080/tcp
+airflow-webserver-integrador   apache/airflow:2.9.3-python3.12   "/usr/bin/dumb-init ÔÇª"   airflow-webserver       15 minutes ago   Up 14 minutes             0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp
+alb-standin-integrador         tp-alb-standin:latest             "python app.py"          alb-standin             15 minutes ago   Up 15 minutes             0.0.0.0:8088->8088/tcp, [::]:8088->8088/tcp
+localstack-integrador          localstack/localstack:latest      "docker-entrypoint.sh"   localstack-integrador   15 minutes ago   Up 15 minutes (healthy)   0.0.0.0:4566->4566/tcp, [::]:4566->4566/tcp
+ministack-integrador           ministackorg/ministack:latest     "python -m ministack"    ministack-integrador    2 weeks ago      Up 2 weeks (healthy)      0.0.0.0:4567->4566/tcp, [::]:4567->4566/tcp
+pgadmin-integrador             dpage/pgadmin4:8                  "/bin/sh -c 'cp /tmpÔÇª"   pgadmin                 14 minutes ago   Up 14 minutes             0.0.0.0:5050->80/tcp, [::]:5050->80/tcp
+postgres-bronce                postgres:16                       "docker-entrypoint.sÔÇª"   postgres-bronce         2 weeks ago      Up 2 weeks (healthy)      0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+postgres-dw                    postgres:16                       "docker-entrypoint.sÔÇª"   postgres-dw             2 weeks ago      Up 2 weeks (healthy)      0.0.0.0:5433->5432/tcp, [::]:5433->5432/tcp
+postgres-erp                   postgres:16                       "docker-entrypoint.sÔÇª"   postgres-erp            15 minutes ago   Up 15 minutes (healthy)   0.0.0.0:5434->5432/tcp, [::]:5434->5432/tcp
+redis-integrador               redis:7                           "docker-entrypoint.sÔÇª"   redis                   12 days ago      Up 12 days (healthy)      0.0.0.0:6379->6379/tcp, [::]:6379->6379/tcp
+s3-soporte                     minio/minio                       "/usr/bin/docker-entÔÇª"   s3-soporte              12 days ago      Up 12 days (healthy)      0.0.0.0:9000-9001->9000-9001/tcp, [::]:9000-9001->9000-9001/tcp
+
+ministack-rds-281afe4a44d7-instance-tp-dw-db  0.0.0.0:15434->5432/tcp, [::]:15434->5432/tcp  Up 10 days
+

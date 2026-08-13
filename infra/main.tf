@@ -1,8 +1,15 @@
-# Orden de dependencias (grafo OpenTofu):
-#   IAM ∥ VPC ∥ S3 ∥ CloudWatch
-#        └→ RDS (subnets + SG) → Secrets (host RDS) → seed SQL
-#        └→ Lambda (role + opcional VPC)
-#        └→ ECS/EFS (API real o stand-in Hobby)
+# =============================================================================
+# Root module TP — instancia los módulos (única fuente IaC del proyecto)
+# -----------------------------------------------------------------------------
+# Grafo: IAM ∥ VPC ∥ S3 ∥ CloudWatch
+#          └→ RDS (subnets + SG) → Secrets (host RDS) → seed SQL
+#          └→ Lambda (role + opcional VPC)
+#          └→ ECS/EFS (API real o stand-in Hobby)
+#          └→ FinOps inventario (Budget AWS solo si create_budget)
+#
+# Idempotencia: tofu apply N veces → sin recrear si el state coincide.
+# Labs/*/iac está deprecado: no corras esos stacks en paralelo (chocan names).
+# =============================================================================
 
 resource "random_password" "master" {
   length  = 20
@@ -186,6 +193,18 @@ module "ecs" {
   execution_role_arn   = module.iam.ecs_execution_role_arn
   task_role_arn        = module.iam.app_role_arn
   tags                 = local.common_tags
+}
+
+module "finops" {
+  source = "./modules/finops"
+
+  providers = {
+    aws = aws.localstack
+  }
+
+  create_budget = var.create_budget
+  notify_email  = var.finops_notify_email
+  tags          = local.common_tags
 }
 
 # Inventario para demos / labs (mismo shape que el viejo vpc/vpc_config.json)

@@ -1,23 +1,15 @@
 # Labs del curso
 
-Material pedagógico (guías, demos Python, stacks OpenTofu por lab).  
-La infraestructura del TP se genera desde [`../infra`](../infra), no desde acá.
+Guías y demos Python. **La infraestructura se genera solo desde [`../infra`](../infra)** (`tofu apply`).
 
-| Lab | Carpeta |
-|-----|---------|
-| 04 IAM | [`iam/`](iam/) |
-| 06 S3 | [`s3/`](s3/) |
-| 07 VPC | [`vpc/`](vpc/) |
-| 08 RDS | [`rds/`](rds/) |
-| 09b ECS / Airflow | [`ecs/`](ecs/) |
-| API Lambda | [`lambda/`](lambda/) |
-| 10 FinOps | [`finops/`](finops/) |
+| Lab | Carpeta | IaC vigente |
+|-----|---------|-------------|
+| 04 IAM | [`iam/`](iam/) | `infra/modules/iam` |
+| 06 S3 | [`s3/`](s3/) | `infra/modules/s3` |
+| 07 VPC | [`vpc/`](vpc/) | `infra/modules/vpc` |
+| 08 RDS | [`rds/`](rds/) | `infra/modules/rds` + `secrets` |
+| 09b ECS | [`ecs/`](ecs/) | `infra/modules/ecs` |
+| API Lambda | [`lambda/`](lambda/) | `infra/modules/lambda` |
+| 10 FinOps | [`finops/`](finops/) | `infra/modules/finops` |
 
-Runtime del producto:
-
-- DAGs → [`../apps/airflow`](../apps/airflow)
-- ETL → [`../apps/etl`](../apps/etl)
-- API → [`../apps/api`](../apps/api)
-- Seeds → [`../data/rds`](../data/rds)
-
-Si queda un `s3/` en la **raíz** del repo, es un apply OpenTofu en curso: cuando termine, movelo a `labs/s3`.
+Runtime: [`../apps`](../apps) · seeds: [`../data/rds`](../data/rds)

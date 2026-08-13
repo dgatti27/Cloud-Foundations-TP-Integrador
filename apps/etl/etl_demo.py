@@ -12,9 +12,9 @@ La orquestación Airflow / DDL vía DAG / EFS NO se hace acá → ecs/ecs_demo.p
 
 Uso
 ---
-    python etl/etl_demo.py
-    python etl/etl_demo.py --with-pipelines   # escribe bronce/gold sin Airflow
-    python etl/etl_demo.py --skip-secret
+    python apps/etl/etl_demo.py
+    python apps/etl/etl_demo.py --with-pipelines   # escribe bronce/gold sin Airflow
+    python apps/etl/etl_demo.py --skip-secret
 """
 
 from __future__ import annotations

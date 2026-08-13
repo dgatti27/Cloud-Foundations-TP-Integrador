@@ -1,0 +1,169 @@
+{
+  "_comment": "Escenario desafío 3 TP: más BI / más datos. Comparar con services.json vía: python pricing.py --services services.scale.json --budget 400",
+  "notes": "RDS 500 GB + backup 250 + S3 500 GB + 1500 k-req + egress 200 GB + Fargate 1.5x + 2 LCU.",
+  "project": "Cloud-Foundations-TP-Integrador",
+  "region": "us-east-1",
+  "budget_target_usd": 400,
+  "services": [
+    {
+      "name": "rds-postgres-maz",
+      "type": "db",
+      "unit": "hs",
+      "monthly_usage": 730,
+      "unit_price": 0.144,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio de instancia — HA del DW."
+    },
+    {
+      "name": "rds-storage-gp3",
+      "type": "storage",
+      "unit": "GB-mes",
+      "monthly_usage": 500,
+      "unit_price": 0.115,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Scale: 250 → 500 GB gp3."
+    },
+    {
+      "name": "rds-backup",
+      "type": "storage",
+      "unit": "GB-mes",
+      "monthly_usage": 250,
+      "unit_price": 0.095,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Scale: 120 → 250 GB backup."
+    },
+    {
+      "name": "ecs-fargate-airflow",
+      "type": "compute",
+      "unit": "hs",
+      "monthly_usage": 730,
+      "unit_price": 0.09255,
+      "sp_eligible": true,
+      "spot_eligible": false,
+      "notes": "Scale: unit_price 1.5× (0.0617→0.09255) más workers Airflow."
+    },
+    {
+      "name": "efs-airflow",
+      "type": "storage",
+      "unit": "GB-mes",
+      "monthly_usage": 10,
+      "unit_price": 0.30,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "nat-gateway",
+      "type": "network",
+      "unit": "hs",
+      "monthly_usage": 730,
+      "unit_price": 0.045,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "nat-data-processed",
+      "type": "network",
+      "unit": "GB",
+      "monthly_usage": 100,
+      "unit_price": 0.045,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio (orígenes)."
+    },
+    {
+      "name": "alb-api",
+      "type": "network",
+      "unit": "hs",
+      "monthly_usage": 730,
+      "unit_price": 0.0225,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio (base ALB)."
+    },
+    {
+      "name": "alb-lcu",
+      "type": "network",
+      "unit": "LCU-hs",
+      "monthly_usage": 1460,
+      "unit_price": 0.008,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Scale: 2 LCU (730→1460 LCU-h)."
+    },
+    {
+      "name": "lambda-gold-api",
+      "type": "compute",
+      "unit": "mes",
+      "monthly_usage": 1,
+      "unit_price": 4.00,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio (agregado referencial)."
+    },
+    {
+      "name": "s3-data-lake",
+      "type": "storage",
+      "unit": "GB-mes",
+      "monthly_usage": 500,
+      "unit_price": 0.023,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Scale: 150 → 500 GB lake."
+    },
+    {
+      "name": "s3-requests",
+      "type": "storage",
+      "unit": "k-req",
+      "monthly_usage": 1500,
+      "unit_price": 0.0004,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Scale: 500 → 1500 k-req."
+    },
+    {
+      "name": "data-egress",
+      "type": "network",
+      "unit": "GB",
+      "monthly_usage": 200,
+      "unit_price": 0.09,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Scale: 80 → 200 GB egress BI."
+    },
+    {
+      "name": "cloudwatch",
+      "type": "storage",
+      "unit": "mes",
+      "monthly_usage": 1,
+      "unit_price": 6.00,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "secrets-manager",
+      "type": "db",
+      "unit": "secret-mes",
+      "monthly_usage": 5,
+      "unit_price": 0.40,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Sin cambio."
+    },
+    {
+      "name": "vpce-s3-gateway",
+      "type": "network",
+      "unit": "mes",
+      "monthly_usage": 1,
+      "unit_price": 0.00,
+      "sp_eligible": false,
+      "spot_eligible": false,
+      "notes": "Gateway S3: $0."
+    }
+  ]
+}

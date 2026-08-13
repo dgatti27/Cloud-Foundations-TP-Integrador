@@ -1,0 +1,119 @@
+=== python pricing.py --budget 300 ===
+utc=2026-08-13T01:03:15.2438626-03:00
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+On-Demand (precio de lista)
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  Servicio             Cargo           Uso Unidad       Precio     Costo
+
+  rds-postgres-maz     db              730 hs       $  0.1440  $ 105.12
+  rds-storage-gp3      storage         250 GB-mes   $  0.1150  $  28.75
+  rds-backup           storage         120 GB-mes   $  0.0950  $  11.40
+  ecs-fargate-airflow  compute         730 hs       $  0.0617  $  45.04
+  efs-airflow          storage          10 GB-mes   $  0.3000  $   3.00
+  nat-gateway          network         730 hs       $  0.0450  $  32.85
+  nat-data-processed   network         100 GB       $  0.0450  $   4.50
+  alb-api              network         730 hs       $  0.0225  $  16.43
+  alb-lcu              network         730 LCU-hs   $  0.0080  $   5.84
+  lambda-gold-api      compute           1 mes      $  4.0000  $   4.00
+  s3-data-lake         storage         150 GB-mes   $  0.0230  $   3.45
+  s3-requests          storage         500 k-req    $  0.0004  $   0.20
+  data-egress          network          80 GB       $  0.0900  $   7.20
+  cloudwatch           storage           1 mes      $  6.0000  $   6.00
+  secrets-manager      db                5 secret-mes $  0.4000  $   2.00
+  vpce-s3-gateway      network           1 mes      $  0.0000  $   0.00
+
+  TOTAL                                                       $ 275.78
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+Optimizado (Savings Plan al baseline + Spot al interrumpible)
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  Servicio             Estrategia   On-Demand  Optimizado   Ahorro
+
+  rds-postgres-maz     OnDemand     $ 105.12  $  105.12  $   0.00
+  rds-storage-gp3      OnDemand     $  28.75  $   28.75  $   0.00
+  rds-backup           OnDemand     $  11.40  $   11.40  $   0.00
+  ecs-fargate-airflow  SavingsPlan  $  45.04  $   31.53  $  13.51
+  efs-airflow          OnDemand     $   3.00  $    3.00  $   0.00
+  nat-gateway          OnDemand     $  32.85  $   32.85  $   0.00
+  nat-data-processed   OnDemand     $   4.50  $    4.50  $   0.00
+  alb-api              OnDemand     $  16.43  $   16.43  $   0.00
+  alb-lcu              OnDemand     $   5.84  $    5.84  $   0.00
+  lambda-gold-api      OnDemand     $   4.00  $    4.00  $   0.00
+  s3-data-lake         OnDemand     $   3.45  $    3.45  $   0.00
+  s3-requests          OnDemand     $   0.20  $    0.20  $   0.00
+  data-egress          OnDemand     $   7.20  $    7.20  $   0.00
+  cloudwatch           OnDemand     $   6.00  $    6.00  $   0.00
+  secrets-manager      OnDemand     $   2.00  $    2.00  $   0.00
+  vpce-s3-gateway      OnDemand     $   0.00  $    0.00  $   0.00
+
+  TOTAL                            $ 275.78  $  262.26  $  13.51
+
+==============================================================================
+Presupuesto vs realidad
+==============================================================================
+  Presupuesto:      $ 300.00
+  On-Demand:        $ 275.78  (  92% del budget)
+  Optimizado:       $ 262.26  (  87% del budget)
+  Ahorro mensual:   $  13.51
+  Estado:           Ô£ô entra en budget con optimizaci├│n
+
+
+=== python pricing.py --services services.endpoints.json --budget 300 ===
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+On-Demand (precio de lista)
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  Servicio             Cargo           Uso Unidad       Precio     Costo
+
+  rds-postgres-maz     db              730 hs       $  0.1440  $ 105.12
+  rds-storage-gp3      storage         250 GB-mes   $  0.1150  $  28.75
+  rds-backup           storage         120 GB-mes   $  0.0950  $  11.40
+  ecs-fargate-airflow  compute         730 hs       $  0.0617  $  45.04
+  efs-airflow          storage          10 GB-mes   $  0.3000  $   3.00
+  nat-gateway          network         730 hs       $  0.0450  $  32.85
+  nat-data-processed   network          25 GB       $  0.0450  $   1.12
+  vpce-s3-gateway      network           1 mes      $  0.0000  $   0.00
+  alb-api              network         730 hs       $  0.0225  $  16.43
+  alb-lcu              network         730 LCU-hs   $  0.0080  $   5.84
+  lambda-gold-api      compute           1 mes      $  4.0000  $   4.00
+  s3-data-lake         storage         150 GB-mes   $  0.0230  $   3.45
+  s3-requests          storage         500 k-req    $  0.0004  $   0.20
+  data-egress          network          80 GB       $  0.0900  $   7.20
+  cloudwatch           storage           1 mes      $  6.0000  $   6.00
+  secrets-manager      db                5 secret-mes $  0.4000  $   2.00
+
+  TOTAL                                                       $ 272.40
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+Optimizado (Savings Plan al baseline + Spot al interrumpible)
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+  Servicio             Estrategia   On-Demand  Optimizado   Ahorro
+
+  rds-postgres-maz     OnDemand     $ 105.12  $  105.12  $   0.00
+  rds-storage-gp3      OnDemand     $  28.75  $   28.75  $   0.00
+  rds-backup           OnDemand     $  11.40  $   11.40  $   0.00
+  ecs-fargate-airflow  SavingsPlan  $  45.04  $   31.53  $  13.51
+  efs-airflow          OnDemand     $   3.00  $    3.00  $   0.00
+  nat-gateway          OnDemand     $  32.85  $   32.85  $   0.00
+  nat-data-processed   OnDemand     $   1.12  $    1.12  $   0.00
+  vpce-s3-gateway      OnDemand     $   0.00  $    0.00  $   0.00
+  alb-api              OnDemand     $  16.43  $   16.43  $   0.00
+  alb-lcu              OnDemand     $   5.84  $    5.84  $   0.00
+  lambda-gold-api      OnDemand     $   4.00  $    4.00  $   0.00
+  s3-data-lake         OnDemand     $   3.45  $    3.45  $   0.00
+  s3-requests          OnDemand     $   0.20  $    0.20  $   0.00
+  data-egress          OnDemand     $   7.20  $    7.20  $   0.00
+  cloudwatch           OnDemand     $   6.00  $    6.00  $   0.00
+  secrets-manager      OnDemand     $   2.00  $    2.00  $   0.00
+
+  TOTAL                            $ 272.40  $  258.89  $  13.51
+
+==============================================================================
+Presupuesto vs realidad
+==============================================================================
+  Presupuesto:      $ 300.00
+  On-Demand:        $ 272.40  (  91% del budget)
+  Optimizado:       $ 258.89  (  86% del budget)
+  Ahorro mensual:   $  13.51
+  Estado:           Ô£ô entra en budget con optimizaci├│n

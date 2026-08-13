@@ -1,0 +1,56 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowReadWriteObjects",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": [
+          "arn:aws:iam::000000000000:role/app-role",
+          "arn:aws:iam::000000000000:user/usuario2-ops"
+        ]
+      },
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:PutObject"
+      ],
+      "Resource": ["arn:aws:s3:::backup-data-lake/*"]
+    },
+    {
+      "Sid": "AllowReadWriteListBucket",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": [
+          "arn:aws:iam::000000000000:role/app-role",
+          "arn:aws:iam::000000000000:user/usuario2-ops"
+        ]
+      },
+      "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
+      "Resource": "arn:aws:s3:::backup-data-lake"
+    },
+    {
+      "Sid": "AllowAdminObjects",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::000000000000:user/usuario1-admin"
+      },
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": ["arn:aws:s3:::backup-data-lake/*"]
+    },
+    {
+      "Sid": "AllowAdminListBucket",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::000000000000:user/usuario1-admin"
+      },
+      "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
+      "Resource": "arn:aws:s3:::backup-data-lake"
+    }
+  ]
+}

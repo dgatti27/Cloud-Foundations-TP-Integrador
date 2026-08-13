@@ -37,11 +37,11 @@ Uso
     # Prereqs: labs 04, 07-v2, 08-tp ya corridos; compose base up.
     python labs/ecs/ecs_demo.py              # camino A (demo conectividad)
     python labs/ecs/ecs_demo.py --erp        # camino A + B (ERP→bronce→gold vía EFS)
-    python labs/ecs/ecs_demo.py --skip-infra # tras tofu apply en labs/ecs/iac
+    python labs/ecs/ecs_demo.py --skip-infra # tras tofu apply en infra/
     python labs/ecs/ecs_demo.py --skip-runtime
     python labs/ecs/ecs_demo.py --cleanup
 
-Infra alternativa (OpenTofu): ecs/iac — IAM execution/task, stand-in marker,
+Infra alternativa (OpenTofu): infra/ — IAM execution/task, stand-in marker,
 secret origen. Runtime (Compose/DAG) siempre es este script o el CLI manual.
 """
 
@@ -156,8 +156,7 @@ def check_prereqs() -> None:
         print(f"  ✓ app-role: {arn}")
     except ClientError as e:
         raise SystemExit(
-            "Falta app-role (lab 04). Corré: cd iam/iac; tofu apply  "
-            "o python iam/iam_demo.py\n"
+            "Falta app-role (lab 04). Corré: cd infra; tofu apply\n"
             f"  detalle: {e}"
         ) from e
 
@@ -168,7 +167,7 @@ def check_prereqs() -> None:
     )["Vpcs"]
     if not vpcs:
         raise SystemExit(
-            "Falta tp-integrador-vpc (lab 07-v2). Corré vpc/provision_vpc_v2.sh"
+            "Falta tp-integrador-vpc (lab 07-v2). Corré: cd infra; tofu apply"
         )
     print(f"  ✓ VPC: {vpcs[0]['VpcId']}")
 
@@ -191,7 +190,7 @@ def check_prereqs() -> None:
     except ClientError as e:
         raise SystemExit(
             f"Falta secret {RDS_ETL_SECRET} (lab 08-tp). "
-            "Corré: python rds/rds_tp_demo.py\n"
+            "Corré: cd infra; tofu apply\n"
             f"  detalle: {e}"
         ) from e
 
@@ -564,7 +563,7 @@ def step_erp_camino_b(container: str) -> None:
         print("  ✓ secret dw/erp")
     except ClientError as e:
         raise SystemExit(
-            "Falta dw/erp. Corré antes: python etl/etl_demo.py\n"
+            "Falta dw/erp. Corré antes: python apps/etl/etl_demo.py\n"
             f"  {e}"
         ) from e
 
@@ -639,7 +638,7 @@ def main() -> int:
         action="store_true",
         help=(
             "No crear IAM / dirs EFS / secret origen "
-            "(ya aplicados con OpenTofu en ecs/iac). Solo runtime: "
+            "(ya aplicados con OpenTofu en infra/). Solo runtime: "
             "Compose, trigger DAG, verify, --erp."
         ),
     )
@@ -665,7 +664,7 @@ def main() -> int:
     print(f"  MiniStack  (Secrets): {ENDPOINT_MINISTACK}")
     print(f"  Compose:              {COMPOSE_FILE.relative_to(ROOT)}")
     if args.skip_infra:
-        print("  modo:                --skip-infra (IaC = ecs/iac)\n")
+        print("  modo:                --skip-infra (IaC = infra/)\n")
     elif args.skip_runtime:
         print("  modo:                --skip-runtime (sin Compose/DAG)\n")
     else:
@@ -678,7 +677,7 @@ def main() -> int:
         step_efs_standin()
         step_origen_secret()
     else:
-        print("\n1–3. Infra omitida (esperada vía tofu apply en ecs/iac)")
+        print("\n1–3. Infra omitida (esperada vía tofu apply en infra/)")
         # Sanity: DAGs deben existir en el stand-in
         dag_file = EFS_DAGS / "etl_bronce_origen_demo.py"
         if not dag_file.is_file():

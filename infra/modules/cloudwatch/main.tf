@@ -1,3 +1,10 @@
+# =============================================================================
+# CloudWatch Logs del TP
+# -----------------------------------------------------------------------------
+# Grupos estables para Airflow (modelo ECS), Lambda gold-api y ETL.
+# Export a MinIO / queries = demo Python, no este módulo.
+# =============================================================================
+
 variable "tags" { type = map(string) }
 
 resource "aws_cloudwatch_log_group" "ecs_airflow" {

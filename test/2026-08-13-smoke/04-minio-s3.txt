@@ -1,0 +1,10 @@
+=== MinIO S3 :9000 (minioadmin) ===
+utc=2026-08-13T01:02:00.6079651-03:00
+
+2026-08-03 00:29:30 backup-data-lake
+2026-07-28 08:49:58 backup-data-raw
+2026-08-03 00:29:30 snapshot-data-lake
+2026-07-28 08:49:59 snapshot-data-raw
+2026-08-03 00:29:30 staging-data-lake
+2026-07-28 08:50:00 staging-data-raw
+

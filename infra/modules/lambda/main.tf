@@ -1,3 +1,13 @@
+# =============================================================================
+# Lambda tp-gold-api (lab-api-TP)
+# -----------------------------------------------------------------------------
+# Zip lite (handler + query_gold) — sin pg8000 en el apply Hobby (idempotente:
+# no corre pip en cada plan). IAM / log group viven en modules/iam y cloudwatch.
+# ALB stand-in = Compose :8088, no este módulo.
+#
+# attach_vpc=false en Hobby: LocalStack a veces no soporta VpcConfig.
+# =============================================================================
+
 variable "function_name" { type = string }
 variable "role_arn" { type = string }
 variable "subnet_ids" { type = list(string) }
@@ -16,7 +26,7 @@ variable "attach_vpc" {
 }
 variable "tags" { type = map(string) }
 
-# Solo el runtime de la API (evitar docker-compose, demos, policies JSON).
+# Solo runtime de la API (apps/api/handler.py + query_gold.py).
 data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "${path.module}/../../generated/tp-gold-api.zip"
@@ -32,25 +42,25 @@ data "archive_file" "lambda_zip" {
 }
 
 resource "aws_lambda_function" "gold_api" {
-  function_name = var.function_name
-  role          = var.role_arn
-  handler       = "handler.lambda_handler"
-  runtime       = "python3.12"
-  filename      = data.archive_file.lambda_zip.output_path
+  function_name    = var.function_name
+  role             = var.role_arn
+  handler          = "handler.lambda_handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  timeout       = 30
-  memory_size   = 256
-  description   = "Lab API — SELECT gold vía api_reader (dw/rds-api)"
+  timeout          = 30
+  memory_size      = 256
+  description      = "TP API — SELECT gold vía api_reader (dw/rds-api)"
 
   environment {
     variables = {
-      SECRETS_ENDPOINT   = var.ministack_endpoint_from_runtime
-      RDS_HOST_OVERRIDE  = var.rds_host_override
-      RDS_PORT_OVERRIDE  = tostring(var.rds_port_override)
-      API_SECRET         = "dw/rds-api"
-      AWS_ACCESS_KEY_ID  = "test"
+      SECRETS_ENDPOINT      = var.ministack_endpoint_from_runtime
+      RDS_HOST_OVERRIDE     = var.rds_host_override
+      RDS_PORT_OVERRIDE     = tostring(var.rds_port_override)
+      API_SECRET            = "dw/rds-api"
+      AWS_ACCESS_KEY_ID     = "test"
       AWS_SECRET_ACCESS_KEY = "test"
-      AWS_DEFAULT_REGION = "us-east-1"
+      AWS_DEFAULT_REGION    = "us-east-1"
     }
   }
 
@@ -63,8 +73,4 @@ resource "aws_lambda_function" "gold_api" {
   }
 
   tags = merge(var.tags, { Name = var.function_name })
-
-  lifecycle {
-    ignore_changes = [last_modified]
-  }
 }

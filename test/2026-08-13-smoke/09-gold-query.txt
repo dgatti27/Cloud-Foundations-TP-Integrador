@@ -1,0 +1,10 @@
+=== API gold/query (sin ETL) ===
+utc=2026-08-13T01:02:04.6032422-03:00
+
+--- table=hecho_ventas (expect 400 allowlist) ---
+{"error":"Tabla no permitida en gold: hecho_ventas. Allowlist: ['bridge_producto_competidor', 'dim_campania', 'dim_canal', 'dim_categoria', 'dim_cliente']\u2026","ok":false}
+
+
+--- table=dim_cliente (expect 500 pg8000 o 200 vacio) ---
+{"detail":"No module named 'pg8000'","error":"ModuleNotFoundError","ok":false}
+

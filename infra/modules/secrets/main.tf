@@ -1,3 +1,14 @@
+# =============================================================================
+# Secrets Manager (MiniStack) — credenciales RDS + orígenes
+# -----------------------------------------------------------------------------
+# JSON shape = el que consumen ECS/Lambda (username, password, host, search_path).
+# Las passwords de roles Postgres (etl_writer / api_reader) se alinean en el
+# seed SQL (ALTER ROLE) del root module.
+#
+# Host en secrets: address MiniStack (red Docker). Apps Compose usan
+# RDS_HOST_OVERRIDE=host.docker.internal.
+# =============================================================================
+
 variable "tags" { type = map(string) }
 variable "db_name" { type = string }
 variable "db_port" { type = number }

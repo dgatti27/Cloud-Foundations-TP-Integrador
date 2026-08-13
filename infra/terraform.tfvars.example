@@ -9,3 +9,8 @@ minio_endpoint      = "http://localhost:9000"
 enable_nat     = true
 enable_ecs_api = false   # true solo en AWS real / LocalStack Pro
 apply_rds_seed = true
+create_budget  = false   # true solo en AWS real + finops_notify_email
+
+# Puerto host del Postgres MiniStack (docker ps --filter name=ministack-rds).
+# Default 15432; en algunos hosts MiniStack publica 15434.
+# rds_port_override = 15432

@@ -1,0 +1,196 @@
+=== tofu plan (idempotencia) ===
+utc=2026-08-13T01:03:11.9415129-03:00
+
+module.finops.local_file.finops_inventory: Refreshing state... [id=45fc0c81ecd5800d2a27f7f2a0d22e166d9075c1]
+random_password.api: Refreshing state... [id=none]
+random_password.etl: Refreshing state... [id=none]
+random_password.master: Refreshing state... [id=none]
+module.iam.data.aws_iam_policy_document.trust_rds_export: Reading...
+module.iam.aws_iam_group.bi_ops: Refreshing state... [id=bi-ops]
+module.iam.aws_iam_group.bi_admin: Refreshing state... [id=bi-admin]
+module.iam.aws_iam_user.admin: Refreshing state... [id=usuario1-admin]
+module.iam.aws_iam_user.ops: Refreshing state... [id=usuario2-ops]
+module.iam.aws_iam_policy.s3_admin: Refreshing state... [id=arn:aws:iam::000000000000:policy/S3AdminTP]
+module.iam.aws_iam_group.bi_api: Refreshing state... [id=bi-api]
+module.cloudwatch.aws_cloudwatch_log_group.ecs_airflow: Refreshing state... [id=/ecs/tp-airflow]
+module.iam.data.aws_iam_policy_document.trust_rds_export: Read complete after 0s [id=2080770395]
+module.cloudwatch.aws_cloudwatch_log_group.lambda_api: Refreshing state... [id=/aws/lambda/tp-gold-api]
+module.vpc.aws_vpc.main: Refreshing state... [id=vpc-04c5df02312204bfc]
+module.iam.data.aws_iam_policy_document.trust_ecs: Reading...
+module.iam.data.aws_iam_policy_document.trust_ecs: Read complete after 0s [id=1077804475]
+module.iam.aws_iam_policy.s3_rw: Refreshing state... [id=arn:aws:iam::000000000000:policy/S3RWTP]
+module.cloudwatch.aws_cloudwatch_log_group.etl: Refreshing state... [id=/tp-integrador/etl]
+module.iam.data.aws_iam_policy_document.trust_lambda: Reading...
+module.iam.data.aws_iam_policy_document.trust_lambda: Read complete after 0s [id=2690255455]
+module.vpc.aws_eip.nat[0]: Refreshing state... [id=eipalloc-6c43d798ed043f789]
+module.iam.aws_iam_role.db: Refreshing state... [id=db-role]
+module.iam.aws_iam_group_policy.bi_api_invoke: Refreshing state... [id=bi-api:InlineInvokeGoldApi]
+module.iam.aws_iam_user_group_membership.admin: Refreshing state... [id=terraform-20260813034841627800000002]
+module.iam.aws_iam_role.app: Refreshing state... [id=app-role]
+module.iam.aws_iam_role.ecs_execution: Refreshing state... [id=ecsTaskExecutionRole]
+module.iam.aws_iam_role.api: Refreshing state... [id=api-role]
+module.iam.aws_iam_user_group_membership.ops: Refreshing state... [id=terraform-20260813034841654100000004]
+module.iam.aws_iam_group_policy.bi_ops_invoke: Refreshing state... [id=bi-ops:InlineInvokeGoldApi]
+module.iam.aws_iam_group_policy_attachment.bi_admin_s3: Refreshing state... [id=bi-admin-20260813034841626800000001]
+module.iam.aws_iam_group_policy_attachment.bi_ops_s3: Refreshing state... [id=bi-ops-20260813034841653100000003]
+module.iam.aws_iam_role_policy.db_s3: Refreshing state... [id=db-role:InlineS3Read]
+module.iam.aws_iam_role_policy.ecs_execution: Refreshing state... [id=ecsTaskExecutionRole:InlineEcsExecution]
+module.vpc.aws_route_table.public: Refreshing state... [id=rtb-2d1eadab56b5282c9]
+module.vpc.aws_route_table.compute: Refreshing state... [id=rtb-502cee151eca1d16b]
+module.vpc.aws_subnet.rds_b: Refreshing state... [id=subnet-b11ea4efd8ea8abbf]
+module.vpc.aws_subnet.compute_b: Refreshing state... [id=subnet-877c07a20fdea80bb]
+module.vpc.aws_security_group.ecs_etl: Refreshing state... [id=sg-71d636eb47417ceb0]
+module.vpc.aws_subnet.rds_a: Refreshing state... [id=subnet-89912fdf6a80198b3]
+module.vpc.aws_internet_gateway.igw: Refreshing state... [id=igw-73f3939ae2635b716]
+module.vpc.aws_security_group.api: Refreshing state... [id=sg-be8fd4f5cb598826a]
+module.vpc.aws_security_group.efs: Refreshing state... [id=sg-30d1e7da0ae9a9c06]
+module.vpc.aws_subnet.public_a: Refreshing state... [id=subnet-0834fd07b5cf1f3e7]
+module.vpc.aws_security_group.rds: Refreshing state... [id=sg-af3b310a8e0c19b51]
+module.vpc.aws_subnet.public_b: Refreshing state... [id=subnet-b1ddecf6251aea47e]
+module.vpc.aws_route_table.rds: Refreshing state... [id=rtb-ec61b94344332d64e]
+module.vpc.aws_security_group.alb: Refreshing state... [id=sg-e3e68e7d47e6f6270]
+module.vpc.aws_subnet.compute_a: Refreshing state... [id=subnet-d80b420017b7e36f2]
+module.vpc.aws_route.public_default: Refreshing state... [id=r-rtb-2d1eadab56b5282c91080289494]
+module.iam.aws_iam_role_policy.app_etl_secrets: Refreshing state... [id=app-role:InlineEtlSecrets]
+module.vpc.aws_vpc_security_group_ingress_rule.efs_from_ecs: Refreshing state... [id=sgr-127c6a7ca3e1e874d]
+module.vpc.aws_route_table_association.public_a: Refreshing state... [id=rtbassoc-aac021c3a8d1a7e24]
+module.iam.aws_iam_role_policy.app_s3: Refreshing state... [id=app-role:InlineS3Read]
+module.vpc.aws_nat_gateway.main[0]: Refreshing state... [id=nat-5a69aaaa217e4077d]
+module.vpc.aws_route_table_association.compute_b: Refreshing state... [id=rtbassoc-f184fac7cf06738a1]
+module.vpc.aws_route_table_association.rds_b: Refreshing state... [id=rtbassoc-3b09f42c4b8f5ad2e]
+module.vpc.aws_vpc_endpoint.s3: Refreshing state... [id=vpce-e1281883d7ee2a9bb]
+module.vpc.aws_route_table_association.rds_a: Refreshing state... [id=rtbassoc-9935af301af6a222d]
+module.vpc.aws_route_table_association.public_b: Refreshing state... [id=rtbassoc-61c6e41974dd0878e]
+module.vpc.aws_route_table_association.compute_a: Refreshing state... [id=rtbassoc-db545ebf21b903632]
+module.vpc.aws_route.compute_nat[0]: Refreshing state... [id=r-rtb-502cee151eca1d16b1080289494]
+module.iam.aws_iam_role_policy.api_secrets: Refreshing state... [id=api-role:InlineApiSecrets]
+module.iam.aws_iam_role_policy.api_execution: Refreshing state... [id=api-role:InlineLambdaExecution]
+module.vpc.aws_vpc_security_group_ingress_rule.rds_from_ecs: Refreshing state... [id=sgr-7d636de0aa6e5e761]
+module.vpc.aws_vpc_security_group_ingress_rule.rds_from_api: Refreshing state... [id=sgr-6f60a66c8fe9182fe]
+module.vpc.aws_vpc_security_group_ingress_rule.alb_https: Refreshing state... [id=sgr-6cbbf6f31bbbfe57c]
+module.vpc.aws_vpc_security_group_ingress_rule.api_from_alb: Refreshing state... [id=sgr-50d86a7d323933f66]
+local_file.vpc_config: Refreshing state... [id=4709251bbeb7b84f595940517bb4d07cff6a28ea]
+module.ecs.local_file.ecs_inventory: Refreshing state... [id=2e38604e0e0bd506c93894953c3c469beeb1843f]
+module.ecs.local_file.efs_standin_marker: Refreshing state... [id=574fbe245cf004f05d7cca9fa272acae5f0f5d14]
+local_file.vpc_config_labs: Refreshing state... [id=4709251bbeb7b84f595940517bb4d07cff6a28ea]
+module.rds.aws_db_subnet_group.tp: Refreshing state... [id=tp-rds-subnets]
+module.rds.aws_db_instance.dw: Refreshing state... [id=db-8EA3CF8FBE744614951B]
+module.secrets.aws_secretsmanager_secret.etl: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:000000000000:secret:dw/rds-etl-35a157]
+module.secrets.aws_secretsmanager_secret.origen_demo: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:000000000000:secret:dw/origen-demo-b9a3c5]
+module.secrets.aws_secretsmanager_secret.api: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:000000000000:secret:dw/rds-api-d8381c]
+module.secrets.aws_secretsmanager_secret.master: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:000000000000:secret:dw/rds-master-0f1716]
+module.secrets.aws_secretsmanager_secret.erp: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:000000000000:secret:dw/erp-fbdd46]
+module.secrets.aws_secretsmanager_secret_version.erp: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:000000000000:secret:dw/erp-fbdd46|terraform-20260803033051867300000008]
+module.secrets.aws_secretsmanager_secret_version.origen_demo: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:000000000000:secret:dw/origen-demo-b9a3c5|terraform-20260803033051867300000009]
+module.secrets.aws_secretsmanager_secret_version.master: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:000000000000:secret:dw/rds-master-0f1716|terraform-2026080303305186730000000a]
+module.secrets.aws_secretsmanager_secret_version.api: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:000000000000:secret:dw/rds-api-d8381c|terraform-20260803033051867300000007]
+module.secrets.aws_secretsmanager_secret_version.etl: Refreshing state... [id=arn:aws:secretsmanager:us-east-1:000000000000:secret:dw/rds-etl-35a157|terraform-20260803033051861000000006]
+null_resource.rds_seed[0]: Refreshing state... [id=3139096863154539465]
+module.lambda_api.data.archive_file.lambda_zip: Reading...
+module.lambda_api.data.archive_file.lambda_zip: Read complete after 0s [id=a264058edfa2da4a56619bb4809b47d190ebc612]
+module.lambda_api.aws_lambda_function.gold_api: Refreshing state... [id=tp-gold-api]
+module.s3.aws_s3_bucket.lake["staging-data-lake"]: Refreshing state... [id=staging-data-lake]
+module.s3.aws_s3_bucket.lake["backup-data-lake"]: Refreshing state... [id=backup-data-lake]
+module.s3.aws_s3_bucket.lake["snapshot-data-lake"]: Refreshing state... [id=snapshot-data-lake]
+module.s3.aws_s3_bucket_versioning.lake["backup-data-lake"]: Refreshing state... [id=backup-data-lake]
+module.s3.aws_s3_bucket_versioning.lake["snapshot-data-lake"]: Refreshing state... [id=snapshot-data-lake]
+module.s3.aws_s3_bucket_versioning.lake["staging-data-lake"]: Refreshing state... [id=staging-data-lake]
+module.s3.aws_s3_bucket_policy.lake["backup-data-lake"]: Refreshing state... [id=backup-data-lake]
+module.s3.aws_s3_bucket_server_side_encryption_configuration.lake["staging-data-lake"]: Refreshing state... [id=staging-data-lake]
+module.s3.aws_s3_bucket_server_side_encryption_configuration.lake["snapshot-data-lake"]: Refreshing state... [id=snapshot-data-lake]
+module.s3.aws_s3_bucket_policy.lake["snapshot-data-lake"]: Refreshing state... [id=snapshot-data-lake]
+module.s3.aws_s3_bucket_policy.lake["staging-data-lake"]: Refreshing state... [id=staging-data-lake]
+module.s3.aws_s3_bucket_server_side_encryption_configuration.lake["backup-data-lake"]: Refreshing state... [id=backup-data-lake]
+
+OpenTofu used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+-/+ destroy and then create replacement
+
+OpenTofu will perform the following actions:
+
+  # module.finops.local_file.finops_inventory must be replaced
+-/+ resource "local_file" "finops_inventory" {
+      ~ content              = jsonencode(
+          ~ {
+              ~ estimation       = {
+                  + decisions         = "docs/decisions.md"
+                  + narrative         = "docs/finops.md"
+                    # (3 unchanged attributes hidden)
+                }
+                tags             = {
+                    Lab       = "09-tp"
+                    ManagedBy = "OpenTofu"
+                    Project   = "tp-integrador"
+                }
+                # (6 unchanged attributes hidden)
+            } # forces replacement
+        )
+      ~ content_base64sha256 = "YjYxyvC+FOD7+O06dJa+JfBG3kn3QhM8CoBsD8Bv6Eg=" -> (known after apply)
+      ~ content_base64sha512 = "5FhQPF+OK2xvCqkm8D+vRddvAExLL+j+k5yG5uo0dgoj5S5QCnAPV9X0jKPRR+g95n5LESO3237ACTRJLTJZsA==" -> (known after apply)
+      ~ content_md5          = "e63e923733dfe775a8e9e1809b598fc1" -> (known after apply)
+      ~ content_sha1         = "45fc0c81ecd5800d2a27f7f2a0d22e166d9075c1" -> (known after apply)
+      ~ content_sha256       = "623631caf0be14e0fbf8ed3a7496be25f046de49f742133c0a806c0fc06fe848" -> (known after apply)
+      ~ content_sha512       = "e458503c5f8e2b6c6f0aa926f03faf45d76f004c4b2fe8fe939c86e6ea34760a23e52e500a700f57d5f48ca3d147e83de67e4b1123b7db7ec00934492d3259b0" -> (known after apply)
+      ~ id                   = "45fc0c81ecd5800d2a27f7f2a0d22e166d9075c1" -> (known after apply)
+        # (3 unchanged attributes hidden)
+    }
+
+Plan: 1 to add, 0 to change, 1 to destroy.
+
+Warning: Value derived from a deprecated source
+
+  on modules\s3\main.tf line 42, in resource "aws_s3_bucket_versioning" "lake":
+  42:   for_each = aws_s3_bucket.lake
+
+This value's attribute backup-data-lake.acceleration_status is derived from
+aws_s3_bucket.lake.acceleration_status, which is deprecated.
+
+Warning: Value derived from a deprecated source
+
+  on modules\s3\main.tf line 42, in resource "aws_s3_bucket_versioning" "lake":
+  42:   for_each = aws_s3_bucket.lake
+
+This value's attribute backup-data-lake.acl is derived from
+aws_s3_bucket.lake.acl, which is deprecated.
+
+Warning: Value derived from a deprecated source
+
+  on modules\s3\main.tf line 42, in resource "aws_s3_bucket_versioning" "lake":
+  42:   for_each = aws_s3_bucket.lake
+
+This value's attribute backup-data-lake.policy is derived from
+aws_s3_bucket.lake.policy, which is deprecated.
+
+Warning: Value derived from a deprecated source
+
+  on modules\s3\main.tf line 42, in resource "aws_s3_bucket_versioning" "lake":
+  42:   for_each = aws_s3_bucket.lake
+
+This value's attribute backup-data-lake.request_payer is derived from
+aws_s3_bucket.lake.request_payer, which is deprecated.
+
+Warning: Value derived from a deprecated source
+
+  on modules\s3\main.tf line 42, in resource "aws_s3_bucket_versioning" "lake":
+  42:   for_each = aws_s3_bucket.lake
+
+This value's attribute backup-data-lake.website_domain is derived from
+aws_s3_bucket.lake.website_domain, which is deprecated.
+
+Warning: Value derived from a deprecated source
+
+  on modules\s3\main.tf line 42, in resource "aws_s3_bucket_versioning" "lake":
+  42:   for_each = aws_s3_bucket.lake
+
+This value's attribute backup-data-lake.website_endpoint is derived from
+aws_s3_bucket.lake.website_endpoint, which is deprecated.
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+
+Note: You didn't use the -out option to save this plan, so OpenTofu can't
+guarantee to take exactly these actions if you run "tofu apply" now.
+
+
+exit_code=2
+# 0 = no changes; 1 = error; 2 = changes present
+# Esperado Hobby: 0, o 2 solo por descriptions SG (ya ignore_changes; re-apply limpia)

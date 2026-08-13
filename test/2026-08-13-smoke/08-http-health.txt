@@ -1,0 +1,14 @@
+=== HTTP health UIs ===
+utc=2026-08-13T01:02:04.1896768-03:00
+
+--- ALB /health ---
+{"ok":true,"stand_in":"alb","target":"tp-gold-api"}
+--- Airflow /health ---
+status=200 body={"dag_processor": {"latest_dag_processor_heartbeat": null, "status": null}, "metadatabase": {"status": "healthy"}, "scheduler": {"latest_scheduler_heartbeat": "2026-08-13T04:01:59.988048+00:00", "stat
+--- Airflow /login/ ---
+status=200 len=18079
+--- pgAdmin /misc/ping ---
+status=200 body=PING
+--- LocalStack /_localstack/health (services keys) ---
+edition=pro version=2026.7.0 services=account,acm-pca,acm,amplify,apigateway,apigatewaymanagementapi,apigatewayv2,appconfig,appconfigdata,application-autoscaling,appsync,athena,autoscaling,backup,batch,bedrock-runtime,bedrock,ce,cloudcontrol,cloudformation,cloudfront,cloudtrail,cloudwatch,codeartifact,codebuild,codecommit,codeconnections,codedeploy,codepipeline,codestar-connections,cognito-identity,cognito-idp,config,dms,docdb,dsql,dynamodb,dynamodbstreams,ec2,ecr,ecs,efs,eks-auth,eks,elasticache,elasticbeanstalk,elb,elbv2,emr-serverless,emr,es,events,firehose,fis,glacier,glue,iam,identitystore,iot-data,iot,iotwireless,kafka,kinesis,kinesisanalyticsv2,kms,lakeformation,lambda,logs,managedblockchain,mediaconvert,memorydb,mq,mwaa,neptune,opensearch,organizations,pinpoint,pipes,ram,rds-data,rds,redshift-data,redshift,resource-groups,resourcegroupstaggingapi,route53,route53resolver,s3,s3control,s3tables,sagemaker-runtime,sagemaker,scheduler,secretsmanager,serverlessrepo,servicediscovery,ses,sesv2,shield,sns,sqs,ssm,sso-admin,stepfunctions,sts,support,swf,textract,timestream-query,timestream-write,transcribe,transfer,verifiedpermissions,wafv2,xray
+

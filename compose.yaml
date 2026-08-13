@@ -15,7 +15,7 @@
 #   RDS MiniStack   :15432
 #   Airflow UI      :8080  (admin / admin)     ≈ Fargate lab 09b
 #   ALB stand-in    :8088                      ≈ lab-api
-#   pgAdmin         :5050  (admin@tp.local / admin)
+#   pgAdmin         :5050  (admin@example.com / admin)
 #
 # Toolbox OpenTofu (no arranca con up -d):
 #   docker compose --profile iac run --rm tp-iac apply
@@ -265,14 +265,16 @@ services:
 
   # ---------------------------------------------------------------------------
   # pgAdmin — UI para Postgres del lab (orígenes + RDS MiniStack)
-  # Login: http://localhost:5050  →  admin@tp.local / admin
+  # Login: http://localhost:5050  →  admin@example.com / admin
+  # (.local no pasa el validador de email de pgAdmin 8)
   # Servers prearmados: bronce / dw(Airflow) / erp. RDS: dwadmin + secret dw/rds-master.
   # ---------------------------------------------------------------------------
   pgadmin:
     image: dpage/pgadmin4:8
     container_name: pgadmin-integrador
+    user: root
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@tp.local}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
       PGADMIN_LISTEN_PORT: "80"

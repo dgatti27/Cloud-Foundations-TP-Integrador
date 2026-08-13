@@ -16,5 +16,5 @@ python labs/ecs/ecs_demo.py --erp
 ```text
 lab-extra:  postgres-erp + paquete extract/transform/load
 lab-09b:    Airflow orquesta → bronce.erp_* → gold.*
-lab-api:    Lambda GET gold (python lambda/lambda_demo.py)
+lab-api:    Lambda GET gold (ALB stand-in :8088 vía compose)
 ```

@@ -47,6 +47,10 @@ output "ecs_mode" {
   value = module.ecs.mode
 }
 
+output "finops_inventory" {
+  value = module.finops.inventory_path
+}
+
 output "cloudwatch_log_groups" {
   value = module.cloudwatch.log_group_names
 }

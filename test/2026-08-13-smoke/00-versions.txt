@@ -1,0 +1,9 @@
+=== versiones ===
+utc=2026-08-13T01:01:51.7621742-03:00
+
+Docker version 28.5.2, build ecc6942
+Docker Compose version v2.40.3-desktop.1
+OpenTofu v1.12.3
+on windows_amd64
+aws-cli/1.45.54 Python/3.14.6 Windows/11 botocore/1.43.54
+

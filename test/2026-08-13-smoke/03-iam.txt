@@ -1,0 +1,12 @@
+=== IAM LocalStack :4566 ===
+utc=2026-08-13T01:01:53.9721849-03:00
+
+app-role
+api-role
+ecsTaskExecutionRole
+db-role
+bi-ops
+bi-admin
+bi-api
+usuario1-admin	usuario2-ops
+

@@ -1,0 +1,12 @@
+=== Lambda tp-gold-api ===
+utc=2026-08-13T01:02:03.3333817-03:00
+
+{
+    "Name": "tp-gold-api",
+    "Runtime": "python3.12",
+    "State": "Active",
+    "Handler": "handler.lambda_handler",
+    "LastModified": "2026-08-13T03:50:16.981091+0000",
+    "Role": "arn:aws:iam::000000000000:role/api-role"
+}
+

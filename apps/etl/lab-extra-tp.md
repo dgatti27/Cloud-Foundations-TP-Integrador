@@ -49,9 +49,9 @@ $env:AWS_SECRET_ACCESS_KEY = "test"
 $env:AWS_DEFAULT_REGION = "us-east-1"
 $env:PYTHONIOENCODING = "utf-8"
 
-python etl/etl_demo.py
+python apps/etl/etl_demo.py
 # Opcional (escribe RDS sin Airflow):
-#   python etl/etl_demo.py --with-pipelines
+#   python apps/etl/etl_demo.py --with-pipelines
 # Orquestación EFS/Airflow (lab 09b):
 #   python ecs/ecs_demo.py --erp
 ```

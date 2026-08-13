@@ -1,6 +1,33 @@
+# =============================================================================
+# IAM del TP — identidades humanas + roles de servicio
+# -----------------------------------------------------------------------------
+# Orden lógico (OpenTofu resuelve dependencias; comentarios = mapa mental):
+#   1) Trust documents (quién puede sts:AssumeRole)
+#   2) Roles de servicio: app-role (ECS task), db-role (RDS export),
+#      ecsTaskExecutionRole (agente ECS), api-role (Lambda)
+#   3) Grupos: bi-ops / bi-admin (S3 lab 04) + bi-api / bi-ops (invoke Lambda)
+#   4) Policies customer-managed S3RWTP / S3AdminTP (JSON en policies/)
+#   5) Users usuario2-ops / usuario1-admin + membresía
+#   6) Inline policies de runtime (ETL secrets, Lambda execution, invoke)
+#
+# NO incluye (runtime / demo, no recurso estable):
+#   create-access-key — SecretAccessKey iría al state
+#   sts assume-role + list MinIO — iam_demo.py / CLI
+#
+# Community LocalStack: se pueden crear/adjuntar/asumir; Deny no enforcea.
+# Idempotencia: mismos names/addresses en cada apply → sin recrear.
+# =============================================================================
+
 variable "project_name" { type = string }
 variable "tags" { type = map(string) }
 
+locals {
+  policy_dir = "${path.module}/policies"
+}
+
+# ---------------------------------------------------------------------------
+# 1) Trust — quién puede AssumeRole (mismo contenido que labs/iam/trust_*.json)
+# ---------------------------------------------------------------------------
 data "aws_iam_policy_document" "trust_ecs" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -31,8 +58,11 @@ data "aws_iam_policy_document" "trust_rds_export" {
   }
 }
 
-# ── Roles ────────────────────────────────────────────────────────────────────
-
+# ---------------------------------------------------------------------------
+# 2) Roles de servicio
+# Trust = quién asume. Inline más abajo = qué puede hacer una vez asumido.
+# Patrón prod: workloads usan roles + STS, no access keys fijas de un user.
+# ---------------------------------------------------------------------------
 resource "aws_iam_role" "app" {
   name               = "app-role"
   assume_role_policy = data.aws_iam_policy_document.trust_ecs.json
@@ -61,16 +91,88 @@ resource "aws_iam_role" "api" {
   tags               = var.tags
 }
 
-resource "aws_iam_group" "bi_api" {
-  name = "bi-api"
-}
-
+# ---------------------------------------------------------------------------
+# 3) Grupos
+# bi-ops / bi-admin = lab 04 (privilegio S3 vía policy administrada).
+# bi-api            = invoke Lambda gold (lab-api).
+# bi-ops también recibe invoke (mismo grupo: ops + API).
+# ---------------------------------------------------------------------------
 resource "aws_iam_group" "bi_ops" {
   name = "bi-ops"
+  path = "/"
 }
 
-# ── Inline policies ──────────────────────────────────────────────────────────
+resource "aws_iam_group" "bi_admin" {
+  name = "bi-admin"
+  path = "/"
+}
 
+resource "aws_iam_group" "bi_api" {
+  name = "bi-api"
+  path = "/"
+}
+
+# ---------------------------------------------------------------------------
+# 4) Policies customer-managed (lab 04) — un origen de verdad: JSON en policies/
+# "Administrada" acá = create-policy, no AWS managed.
+# ---------------------------------------------------------------------------
+resource "aws_iam_policy" "s3_rw" {
+  name        = "S3RWTP"
+  description = "Read/write acotado al data lake / raw del TP"
+  path        = "/"
+  policy      = file("${local.policy_dir}/s3_readwrite_policy.json")
+  tags        = var.tags
+}
+
+resource "aws_iam_policy" "s3_admin" {
+  name        = "S3AdminTP"
+  description = "Admin-ish sobre buckets del TP (incluye DeleteObject)"
+  path        = "/"
+  policy      = file("${local.policy_dir}/s3_admin_policy.json")
+  tags        = var.tags
+}
+
+resource "aws_iam_group_policy_attachment" "bi_ops_s3" {
+  group      = aws_iam_group.bi_ops.name
+  policy_arn = aws_iam_policy.s3_rw.arn
+}
+
+resource "aws_iam_group_policy_attachment" "bi_admin_s3" {
+  group      = aws_iam_group.bi_admin.name
+  policy_arn = aws_iam_policy.s3_admin.arn
+}
+
+# ---------------------------------------------------------------------------
+# 5) Users + membresía (lab 04)
+# El user no tiene policies propias: el acceso S3 viene del grupo.
+# Sin access keys → eso es demo/CLI (no IaC).
+# ---------------------------------------------------------------------------
+resource "aws_iam_user" "ops" {
+  name = "usuario2-ops"
+  path = "/"
+  tags = merge(var.tags, { Group = "bi-ops" })
+}
+
+resource "aws_iam_user" "admin" {
+  name = "usuario1-admin"
+  path = "/"
+  tags = merge(var.tags, { Group = "bi-admin" })
+}
+
+resource "aws_iam_user_group_membership" "ops" {
+  user   = aws_iam_user.ops.name
+  groups = [aws_iam_group.bi_ops.name]
+}
+
+resource "aws_iam_user_group_membership" "admin" {
+  user   = aws_iam_user.admin.name
+  groups = [aws_iam_group.bi_admin.name]
+}
+
+# ---------------------------------------------------------------------------
+# 6) Inline policies de runtime (TP)
+# Nombre InlineS3Read = mismo que lab 04 / iam_demo (put-role-policy).
+# ---------------------------------------------------------------------------
 resource "aws_iam_role_policy" "app_s3" {
   name = "InlineS3Read"
   role = aws_iam_role.app.id
@@ -90,9 +192,9 @@ resource "aws_iam_role_policy" "app_s3" {
         ]
       },
       {
-        Sid      = "AllowListBucket"
-        Effect   = "Allow"
-        Action   = ["s3:ListBucket", "s3:GetBucketLocation"]
+        Sid    = "AllowListBucket"
+        Effect = "Allow"
+        Action = ["s3:ListBucket", "s3:GetBucketLocation"]
         Resource = [
           "arn:aws:s3:::backup-data-raw",
           "arn:aws:s3:::snapshot-data-raw",
@@ -103,6 +205,12 @@ resource "aws_iam_role_policy" "app_s3" {
       },
     ]
   })
+}
+
+resource "aws_iam_role_policy" "db_s3" {
+  name   = "InlineS3Read"
+  role   = aws_iam_role.db.id
+  policy = file("${local.policy_dir}/s3_readwrite_policy.json")
 }
 
 resource "aws_iam_role_policy" "app_etl_secrets" {
@@ -216,9 +324,9 @@ resource "aws_iam_group_policy" "bi_api_invoke" {
         Resource = ["arn:aws:lambda:*:*:function:tp-gold-api"]
       },
       {
-        Sid      = "DenySecretsAndBronce"
-        Effect   = "Deny"
-        Action   = ["secretsmanager:GetSecretValue"]
+        Sid    = "DenySecretsAndBronce"
+        Effect = "Deny"
+        Action = ["secretsmanager:GetSecretValue"]
         Resource = [
           "arn:aws:secretsmanager:*:*:secret:dw/rds-master*",
           "arn:aws:secretsmanager:*:*:secret:dw/rds-etl*",
@@ -242,9 +350,9 @@ resource "aws_iam_group_policy" "bi_ops_invoke" {
         Resource = ["arn:aws:lambda:*:*:function:tp-gold-api"]
       },
       {
-        Sid      = "DenySecretsAndBronce"
-        Effect   = "Deny"
-        Action   = ["secretsmanager:GetSecretValue"]
+        Sid    = "DenySecretsAndBronce"
+        Effect = "Deny"
+        Action = ["secretsmanager:GetSecretValue"]
         Resource = [
           "arn:aws:secretsmanager:*:*:secret:dw/rds-master*",
           "arn:aws:secretsmanager:*:*:secret:dw/rds-etl*",

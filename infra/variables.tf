@@ -125,3 +125,15 @@ variable "repo_root" {
   description = "Raíz del repo (para paths a seed SQL, apps/api, apps/airflow)."
   default     = ".."
 }
+
+variable "create_budget" {
+  type        = bool
+  description = "AWS Budget real. false en Hobby (LocalStack no tiene Budgets usable)."
+  default     = false
+}
+
+variable "finops_notify_email" {
+  type        = string
+  description = "Email de alertas del Budget. Obligatorio si create_budget=true."
+  default     = "you@example.com"
+}
