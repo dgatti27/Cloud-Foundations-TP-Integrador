@@ -1,0 +1,44 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "postgres-bronce (origen demo)",
+      "Group": "TP Integrador",
+      "Host": "postgres-bronce",
+      "Port": 5432,
+      "MaintenanceDB": "bronce",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "PassFile": "/tmp/pgpass.chmod"
+    },
+    "2": {
+      "Name": "postgres-dw (metastore Airflow)",
+      "Group": "TP Integrador",
+      "Host": "postgres-dw",
+      "Port": 5432,
+      "MaintenanceDB": "gold",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "PassFile": "/tmp/pgpass.chmod"
+    },
+    "3": {
+      "Name": "postgres-erp (lab extra)",
+      "Group": "TP Integrador",
+      "Host": "postgres-erp",
+      "Port": 5432,
+      "MaintenanceDB": "erp",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "PassFile": "/tmp/pgpass.chmod"
+    },
+    "4": {
+      "Name": "RDS MiniStack tp-dw-db (bronce+gold)",
+      "Group": "TP Integrador",
+      "Host": "host.docker.internal",
+      "Port": 15432,
+      "MaintenanceDB": "dw",
+      "Username": "dwadmin",
+      "SSLMode": "prefer",
+      "Comment": "Password = secret dw/rds-master (MiniStack). No está en pgpass."
+    }
+  }
+}

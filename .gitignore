@@ -23,11 +23,11 @@ __pycache__/
 **/crash.log
 **/override.tf
 **/*_override.tf
-iac/tp/generated/*
-!iac/tp/generated/.gitkeep
-iac/tp/*.tfvars
-!iac/tp/terraform.tfvars.example
+infra/generated/*
+!infra/generated/.gitkeep
+infra/*.tfvars
+!infra/terraform.tfvars.example
 
-# Airflow stand-in — logs runtime (symlinks rompen docker build en Windows)
-ecs/efs-standin/logs/
-!ecs/efs-standin/logs/.gitkeep
+# Airflow — logs runtime (symlinks rompen docker build en Windows)
+apps/airflow/logs/
+!apps/airflow/logs/.gitkeep

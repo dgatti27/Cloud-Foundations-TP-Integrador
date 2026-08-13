@@ -1,0 +1,63 @@
+{
+  "_comment": "Inventario del EFS del lab 09b (Airflow DAGs + logs). Documenta el stand-in local vs el to-be en AWS. Lo lee ecs_demo.py (mode) y sirve de referencia humana. Claves _comment / _docs son documentación.",
+
+  "mode": "stand-in",
+  "_docs_mode": "stand-in = carpeta local ecs/efs-standin/ montada en Compose (sin API EFS en LocalStack Community). aws = create-file-system real (Learner Lab / prod).",
+
+  "notes": "LocalStack Hobby/Community: servicio EFS no incluido en la licencia. El lab usa ecs/efs-standin/ como EFS (DAGs+logs). TODO DAG de Airflow del lab 09b (demo + ERP→bronce + bronce→gold) DEBE vivir bajo dags_path: es el access point /airflow/dags del to-be. Logs de cada run quedan en logs_path (access point /airflow/logs). En AWS real: create-file-system + access points + mount targets en subnets Role=ecs-lambda-efs con sg-efs. El paquete etl/ se monta aparte (PYTHONPATH) como código de librería; en Fargate real iría en la imagen o también en EFS.",
+
+  "stand_in": {
+    "_comment": "Sustituto local de EFS: directorios en el repo bind-mountados al contenedor Airflow (Compose). Mismos paths lógicos que los access points del to-be.",
+    "_docs": {
+      "dags_path": "Carpeta host = access point /airflow/dags. Ahí deben vivir TODOS los DAGs del lab.",
+      "logs_path": "Carpeta host = access point /airflow/logs. Logs de scheduler/task runs.",
+      "dags": "Lista completa de DAGs del lab (inventario).",
+      "dag_demo": "DAG demo bronce (origen sintético) — smoke del pipeline.",
+      "dag_erp_to_bronce": "ETL ERP → schema bronce (carga cruda).",
+      "dag_bronce_to_gold": "ETL bronce → schema gold (Modelo_DW / analytics)."
+    },
+    "dags_path": "ecs/efs-standin/dags",
+    "logs_path": "ecs/efs-standin/logs",
+    "dags": [
+      "ecs/efs-standin/dags/etl_bronce_origen_demo.py",
+      "ecs/efs-standin/dags/etl_erp_to_bronce.py",
+      "ecs/efs-standin/dags/etl_bronce_to_gold.py"
+    ],
+    "dag_demo": "ecs/efs-standin/dags/etl_bronce_origen_demo.py",
+    "dag_erp_to_bronce": "ecs/efs-standin/dags/etl_erp_to_bronce.py",
+    "dag_bronce_to_gold": "ecs/efs-standin/dags/etl_bronce_to_gold.py"
+  },
+
+  "aws_to_be": {
+    "_comment": "Diseño objetivo en AWS real: EFS compartido por tasks Fargate Airflow. Access points aislados (dags vs logs); mount targets en subnets de compute con sg-efs.",
+    "_docs": {
+      "file_system_name": "Nombre/tag del File System EFS.",
+      "access_point_dags_path": "Path raíz del access point de DAGs dentro del FS.",
+      "access_point_logs_path": "Path raíz del access point de logs.",
+      "mount_subnets_tag": "Tag Role de las subnets donde crear mount targets (lab 07-v2: ecs-lambda-efs).",
+      "security_group": "SG que permite NFS 2049 desde sg-ecs-etl (lab 07-v2).",
+      "compose_bind_equivalent": "Equivalencia Compose local ↔ mount EFS en la task (host:container)."
+    },
+    "file_system_name": "tp-airflow-efs",
+    "access_point_dags_path": "/airflow/dags",
+    "access_point_logs_path": "/airflow/logs",
+    "mount_subnets_tag": "Role=ecs-lambda-efs",
+    "security_group": "sg-efs",
+    "compose_bind_equivalent": {
+      "dags": "./ecs/efs-standin/dags:/opt/airflow/dags",
+      "logs": "./ecs/efs-standin/logs:/opt/airflow/logs"
+    }
+  },
+
+  "resolved_network": {
+    "_comment": "IDs resueltos de una corrida LocalStack (lab 07-v2). Son de referencia / cache local: pueden cambiar si recreás la VPC. En AWS real se obtienen por lookup de tags, no hardcode.",
+    "_docs": {
+      "sg_efs": "GroupId del security group sg-efs (NFS 2049).",
+      "subnet_compute_a": "Subnet privada compute AZ-a (mount target / tasks).",
+      "subnet_compute_b": "Subnet privada compute AZ-b (HA Multi-AZ)."
+    },
+    "sg_efs": "sg-c66c95ead8e7700a9",
+    "subnet_compute_a": "subnet-aafbeecf2522b9599",
+    "subnet_compute_b": "subnet-dea6990d018918795"
+  }
+}

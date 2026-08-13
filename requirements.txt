@@ -1,11 +1,20 @@
+# Deps Python del TP: host (pip install -r requirements.txt) + imagen toolbox (docker/Dockerfile).
+# Guía Docker/OpenTofu: docker/DOCKER.md
+
+# AWS / emuladores
 boto3>=1.34.0
+botocore>=1.34.0
+awscli
+awscli-local>=0.22.0
+localstack-client
+python-dotenv>=1.0.0
+
+# Datos / ETL / labs
 psycopg2-binary>=2.9.0
 duckdb>=0.10.0
-python-dotenv>=1.0.0
 kafka-python>=2.0.0
 redis>=5.0.0
-awscli
-localstack-client
+
+# Dev
 pytest>=8.0.0
-awscli-local>=0.22.0
 pre-commit>=3.5.0

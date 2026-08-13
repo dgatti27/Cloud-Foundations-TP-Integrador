@@ -1,0 +1,3 @@
+postgres-bronce:5432:*:postgres:postgres
+postgres-dw:5432:*:postgres:postgres
+postgres-erp:5432:*:postgres:postgres

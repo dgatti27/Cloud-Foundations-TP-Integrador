@@ -34,23 +34,25 @@ jobs:
       - name: Instalar herramientas
         run: python -m pip install --upgrade pip ruff   # 'run' = comando de shell
       - name: Instalar dependencias de los ETL
-        run: pip install -r etl/requirements.txt
+        run: pip install -r apps/etl/requirements.txt
       - name: Lint (ruff, solo errores reales)
         # ruff revisa el código. Con --select limitamos a errores de verdad
         # (sintaxis, nombres indefinidos), no cuestiones de estilo.
-        run: ruff check --select E9,F63,F7,F82 etl
+        run: ruff check --select E9,F63,F7,F82 apps/etl
       - name: Compilar (py_compile)
         # Verifica que todos los .py compilen (no tengan errores de sintaxis).
         # 'git ls-files' lista los archivos versionados que matchean el patrón.
         run: |
-          python -m py_compile $(git ls-files 'etl/*.py')
-          python -m py_compile $(git ls-files 'iac/local-docker/airflow/dags/*.py')
+          python -m py_compile $(git ls-files 'apps/etl/*.py')
+          python -m py_compile $(git ls-files 'apps/airflow/dags/*.py')
       - name: Import + smoke test del paquete etl
         # Importa el paquete y corre el flujo completo con los stubs, para
         # verificar que las piezas encajan (no valida datos reales).
         run: |
-          python -c "from etl.extract import EXTRACTORS; assert set(EXTRACTORS) == {'erp-foxpro','ecommerce-mongo','eventos-mongo','scraping'}, EXTRACTORS; print('etl OK')"
+          PYTHONPATH=apps python -c "from etl.extract import EXTRACTORS; assert set(EXTRACTORS) == {'erp-foxpro','ecommerce-mongo','eventos-mongo','scraping'}, EXTRACTORS; print('etl OK')"
           python - <<'PY'
+          import sys
+          sys.path.insert(0, "apps")
           from etl.extract import EXTRACTORS
           from etl.transform import normalize_records
           from etl.load import load_to_cruda, load_to_dw
@@ -83,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: iac/terraform   # todos los 'run' de este job corren acá
+        working-directory: infra   # todos los 'run' de este job corren acá
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3  # instala Terraform en el runner
@@ -110,7 +112,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validar compose.yaml
         # 'config -q' parsea el compose y falla si hay errores. No levanta nada.
-        run: docker compose -f iac/local-docker/compose.yaml config -q && echo "compose OK"
+        run: docker compose -f compose.yaml config -q && echo "compose OK"
 
   # -------------------------------------------------------------------------
   finops:
@@ -124,5 +126,5 @@ jobs:
       - name: Validar services.json y correr el estimador
         # Verifica que el JSON de costos sea válido y corre la calculadora.
         run: |
-          python -c "import json; json.load(open('finops/services.json')); print('services.json OK')"
-          python finops/pricing.py --services finops/services.json --budget 300
+          python -c "import json; json.load(open('labs/finops/services.json')); print('services.json OK')"
+          python labs/finops/pricing.py --services services.json --budget 300

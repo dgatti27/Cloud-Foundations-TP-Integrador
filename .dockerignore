@@ -1,4 +1,5 @@
 # Build context exclusions — la imagen NO debe llevar secretos ni state mutable.
+# Vive en la raíz porque el context del toolbox es `.` (ver docker/Dockerfile).
 .git
 .github
 .ruff_cache
@@ -15,8 +16,9 @@
 .env.*
 !.env.example
 
-# Airflow stand-in — excluir TODO el árbol (mount en runtime). Evita symlinks Windows.
-ecs/
+# Airflow logs — mount en runtime. Evita symlinks Windows en el build.
+apps/airflow/logs/
+labs/
 
 # Docs / assets pesados no requeridos para aplicar IaC
 assets/

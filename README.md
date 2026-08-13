@@ -23,32 +23,32 @@ El computo de los ETL es serverless sobre **ECS Fargate + EFS**: no se usa EC2.
 ```
 .
 ├── README.md
-├── Dockerfile                 # imagen toolbox (OpenTofu + proyecto) — ver iac/DOCKER.md
-├── docker-compose.iac.yaml    # servicio tp-iac (profile: iac)
-├── compose.yaml               # LocalStack + MiniStack + MinIO + Postgres
-├── Solution_Arquitecture.md   # plan de migracion (entregable principal)
-├── .github/
-│   └── workflows/
-│       └── ci.yml             # validaciones CI (GitHub Actions)
-├── assets/                    # diagramas del plan (as-is, to-be, Gantt)
-├── docs/
-├── etl/                       # logica de los ETL (paquete Python)
-├── finops/                    # estimador de costos
-├── iac/                       # OpenTofu + demos + DOCKER.md
-├── iam/                       # identidad y accesos
-├── monitoring/                # observabilidad
-├── rds/                       # base de datos (Bronce + DW)
-├── s3/                        # almacenamiento de objetos
-├── ecs/                       # Airflow stand-in / Fargate model
-├── lambda/                    # API gold
-└── vpc/                       # red y aislamiento
+├── compose.yaml               # runtime local: emuladores + Airflow + ALB + pgAdmin
+├── requirements.txt
+├── docker/                    # imagen toolbox OpenTofu
+│   ├── Dockerfile
+│   ├── entrypoint.sh
+│   └── DOCKER.md
+├── docs/                      # arquitectura / ADRs
+├── infra/                     # única fuente IaC (OpenTofu)
+│   ├── main.tf
+│   ├── modules/               # iam, vpc, s3, rds, secrets, lambda, ecs, cloudwatch
+│   └── scripts/post_rds.py
+├── apps/
+│   ├── etl/                   # paquete Python de pipelines
+│   ├── api/                   # Lambda handler + ALB stand-in
+│   └── airflow/               # DAGs + logs (≈ EFS)
+├── data/rds/                  # seeds SQL
+├── ops/                       # pgAdmin + scripts de bootstrap
+├── labs/                      # labs del curso (demos + iac pedagógicos)
+└── .github/workflows/
 ```
 
 ## Ejecutar IaC (OpenTofu)
 
 Levanta IAM, VPC, S3 (MinIO), RDS, Secrets, CloudWatch, Lambda y marcadores ECS/EFS de forma **idempotente**.
 
-Docs: [`iac/lab-09-tp.md`](iac/lab-09-tp.md) · imagen Docker: [`iac/DOCKER.md`](iac/DOCKER.md)
+Docs: [`docker/DOCKER.md`](docker/DOCKER.md)
 
 ### 1. Prerequisitos
 
@@ -61,7 +61,7 @@ cp .env.example .env
 
 ```bash
 docker compose up -d
-docker compose ps   # localstack / ministack / s3-soporte → healthy
+docker compose ps   # localstack / ministack / minio / airflow / alb / pgadmin → healthy
 ```
 
 ### 3. Aplicar la infraestructura
@@ -69,36 +69,30 @@ docker compose ps   # localstack / ministack / s3-soporte → healthy
 **Opción A — en el host** (necesitás OpenTofu + Python/boto3):
 
 ```bash
-# Primera vez si ya corriste demos a mano (roles/buckets/RDS):
-python iac/iac_demo.py --reconcile
-
-# Apply (re-ejecutable; segundo run ≈ sin cambios):
-python iac/iac_demo.py
+# Primera vez / apply (re-ejecutable; segundo run ≈ sin cambios):
+cd infra && tofu init && tofu apply
 ```
 
 **Opción B — con la imagen toolbox** (sin instalar `tofu` en el host):
 
 ```bash
-docker compose -f compose.yaml -f docker-compose.iac.yaml --profile iac build tp-iac
+docker compose --profile iac build tp-iac
 
 # Primera vez con restos de demos imperativos:
-docker compose -f compose.yaml -f docker-compose.iac.yaml --profile iac \
-  run --rm tp-iac apply-reconcile
+docker compose --profile iac run --rm tp-iac apply-reconcile
 
 # Apply idempotente:
-docker compose -f compose.yaml -f docker-compose.iac.yaml --profile iac \
-  run --rm tp-iac apply
+docker compose --profile iac run --rm tp-iac apply
 ```
 
 ### 4. Verificar
 
 ```bash
 # Host
-cd iac/tp && tofu output
+cd infra && tofu output
 
 # O desde la imagen
-docker compose -f compose.yaml -f docker-compose.iac.yaml --profile iac \
-  run --rm tp-iac tofu output
+docker compose --profile iac run --rm tp-iac tofu output
 ```
 
 Checks útiles:
@@ -110,18 +104,16 @@ aws --endpoint-url http://localhost:4567 rds describe-db-instances --db-instance
 aws --endpoint-url http://localhost:4566 lambda get-function --function-name tp-gold-api
 ```
 
-### 5. Runtime Hobby (opcional)
+### 5. Runtime Hobby
 
-```bash
-python ecs/ecs_demo.py       # Airflow ≈ Fargate
-python lambda/lambda_demo.py # API gold / ALB stand-in
-```
+Airflow (`:8080`) y ALB stand-in (`:8088`) ya arrancan con `docker compose up -d`.
+Los demos Python triggerean DAGs / invocan la Lambda (no hace falta otro compose).
 
 ### Cleanup
 
 ```bash
-python iac/iac_demo.py --destroy
-# o: docker compose … run --rm tp-iac destroy
+cd infra && tofu destroy
+# o: docker compose --profile iac run --rm tp-iac destroy
 
 docker compose down          # no uses -v si querés conservar datos
 ```

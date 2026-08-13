@@ -1,14 +1,21 @@
 # =============================================================================
-# main.tf — Recursos IAM (+ buckets MinIO opcionales)
+# main.tf — Recursos IAM lab 04 (+ buckets MinIO opcionales)
 # -----------------------------------------------------------------------------
 # Orden lógico (dependencias OpenTofu las resuelve; comentarios = mapa mental):
 #   2) buckets MinIO *-data-raw (+ seed sample/hello.txt)
 #   3) policies administradas + grupos + attach
 #   4) usuarios + membresía a grupos
 #   6) roles (trust ECS / RDS export) + inline policy S3
+#
+# NO incluye (queda en iam_demo.py / CLI del lab):
+#   5) create-access-key — riesgo pedagógico; el SecretAccessKey iría al state
+#   7) sts assume-role + list MinIO — runtime / demo, no recurso estable
+#
+# Community: se pueden crear/adjuntar/asumir; Deny no enforcea (lab-04.md).
 # =============================================================================
 
 # ---------------------------------------------------------------------------
+# locals — mapa del lab (nombres = lab-04.md / iam_demo.py)
 # path.module = directorio iam/iac/
 # ---------------------------------------------------------------------------
 locals {
@@ -45,9 +52,9 @@ locals {
 }
 
 # ---------------------------------------------------------------------------
-# 2) Buckets de referencia en MinIO
+# 2) Buckets de referencia en MinIO (lab paso 2)
 # for_each vacío si manage_minio_buckets=false → no crea nada en MinIO.
-# force_destroy=true: tofu destroy puede borrar aunque haya objetos.
+# force_destroy=true: tofu destroy puede borrar aunque haya objetos (solo lab).
 # Las policies IAM referencian estos nombres por ARN; el enforcement IAM×MinIO
 # no es el de AWS real (acá el lab enseña el modelo, no el gate real).
 # ---------------------------------------------------------------------------
@@ -61,7 +68,7 @@ resource "aws_s3_bucket" "raw" {
 
   tags = merge(var.tags, {
     Name = each.value
-    Tier = "raw-ref"
+    Tier = "raw-ref" # distinto de lake (lab 06)
   })
 }
 

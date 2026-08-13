@@ -1,4 +1,54 @@
+# =============================================================================
+# compose.yaml — stack único del TP (raíz del repo)
+# -----------------------------------------------------------------------------
+# Queda en la raíz para que `docker compose up -d` y los volúmenes ./apps, ./ops
+# funcionen. Imagen toolbox: docker/Dockerfile + docker/entrypoint.sh.
+#
+#   docker compose up -d
+#   docker compose ps
+#
+# UI / puertos:
+#   LocalStack   :4566
+#   MiniStack    :4567  (RDS + Secrets DB)
+#   MinIO        :9000 / consola :9001
+#   postgres-bronce :5432 · postgres-dw :5433 · postgres-erp :5434
+#   RDS MiniStack   :15432
+#   Airflow UI      :8080  (admin / admin)     ≈ Fargate lab 09b
+#   ALB stand-in    :8088                      ≈ lab-api
+#   pgAdmin         :5050  (admin@tp.local / admin)
+#
+# Toolbox OpenTofu (no arranca con up -d):
+#   docker compose --profile iac run --rm tp-iac apply
+# =============================================================================
+
+name: cloud-foundations-tp-integrador
+
+# Env compartido Airflow (web / scheduler / init) — ≈ task definition Fargate
+x-airflow-env: &airflow_env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres-dw:5432/gold
+  AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+  PYTHONPATH: /opt/airflow/packages
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  AWS_DEFAULT_REGION: us-east-1
+  SECRETS_ENDPOINT: http://ministack-integrador:4566
+  RDS_HOST_OVERRIDE: host.docker.internal
+  RDS_PORT_OVERRIDE: "15432"
+  RDS_ETL_SECRET: dw/rds-etl
+  ORIGEN_SECRET: dw/origen-demo
+  ERP_SECRET: dw/erp
+
+x-airflow-volumes: &airflow_volumes
+  - ./apps/airflow/dags:/opt/airflow/dags
+  - ./apps/airflow/logs:/opt/airflow/logs
+  - ./apps/etl:/opt/airflow/packages/etl
+
 services:
+  # ---------------------------------------------------------------------------
+  # Orígenes Postgres
+  # ---------------------------------------------------------------------------
   postgres-bronce:
     image: postgres:16
     container_name: postgres-bronce
@@ -7,7 +57,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB_BRONCE:-bronce}
     ports:
-      # Puerto host propio — NO reusar POSTGRES_PORT (chocaba con postgres-dw)
       - "${POSTGRES_BRONCE_PORT:-5432}:5432"
     volumes:
       - postgres-data-bronce:/var/lib/postgresql/data
@@ -34,7 +83,6 @@ services:
       timeout: 5s
       retries: 10
 
-  # Lab extra — origen ERP (Clientes / Productos / Ventas). Seed en etl/erp/seed_erp.sql
   postgres-erp:
     image: postgres:16
     container_name: postgres-erp
@@ -46,13 +94,16 @@ services:
       - "${POSTGRES_ERP_PORT:-5434}:5432"
     volumes:
       - postgres-data-erp:/var/lib/postgresql/data
-      - ./etl/erp/seed_erp.sql:/docker-entrypoint-initdb.d/01_seed_erp.sql:ro
+      - ./apps/etl/erp/seed_erp.sql:/docker-entrypoint-initdb.d/01_seed_erp.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB_ERP:-erp}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
+  # ---------------------------------------------------------------------------
+  # Data lake S3 (MinIO) — decisión 002
+  # ---------------------------------------------------------------------------
   s3-soporte:
     image: minio/minio
     container_name: s3-soporte
@@ -60,9 +111,6 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      # KMS mínimo para lab: habilita put-bucket-encryption / SSE-S3 (NO usar en prod)
-      # Formato: <nombre-key>:<32-bytes-en-base64>
-      # Debe ser name:<base64 de exactamente 32 bytes>. La clave anterior tenía 29 y MinIO abortaba.
       MINIO_KMS_SECRET_KEY: ${MINIO_KMS_SECRET_KEY:-tp-lab-key:YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXowMTIzNDU=}
     ports:
       - "9000:9000"
@@ -70,7 +118,6 @@ services:
     volumes:
       - minio-data:/data
     healthcheck:
-      # curl ya no viene en la imagen MinIO; mc sí
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s
       timeout: 5s
@@ -91,20 +138,16 @@ services:
       timeout: 3s
       retries: 5
 
+  # ---------------------------------------------------------------------------
+  # LocalStack — IAM / VPC / Lambda / Logs (S3 del TP = MinIO)
+  # ---------------------------------------------------------------------------
   localstack-integrador:
     image: localstack/localstack:latest
     container_name: localstack-integrador
     environment:
       LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:?Set LOCALSTACK_AUTH_TOKEN (Hobby)}
-      # S3 del TP = MinIO (:9000). LocalStack S3 queda fuera para no duplicar el lake (decisión 002).
-      # Para reactivar S3 en LocalStack, descomentar "s3," en la lista:
-      # S3 del TP = MinIO. ecs/efs requieren LocalStack Pro — lab 09b usa stand-in Docker (ver ecs/).
-      # SERVICES: s3,sqs,...,ecs,efs
       SERVICES: sqs,sns,lambda,dynamodb,events,cloudwatch,logs,iam,ec2,secretsmanager
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
-      # Persiste IAM/EC2/VPC/etc. en el volumen localstack-data entre reinicios.
-      # Sin esto, un restart deja solo la VPC default (como pasó con tp-integrador-vpc).
-      # Ojo: `docker compose down -v` borra el volumen y sí pierde todo.
       PERSISTENCE: "1"
     ports:
       - "4566:4566"
@@ -117,7 +160,7 @@ services:
       timeout: 5s
       retries: 10
 
-  # RDS Postgres real + Secrets DB. :4567 para no pisar LocalStack S3 (:4566).
+  # RDS Postgres real + Secrets DB. Host :4567 → interno :4566
   ministack-integrador:
     image: ministackorg/ministack:latest
     container_name: ministack-integrador
@@ -126,7 +169,6 @@ services:
       RDS_PERSIST: "1"
       S3_PERSIST: "0"
       LOG_LEVEL: INFO
-      # Evita chocar con postgres-bronce :5432 / postgres-dw :5433 en el host
       RDS_BASE_PORT: "15432"
     ports:
       - "4567:4566"
@@ -146,6 +188,159 @@ services:
       retries: 10
       start_period: 5s
 
+  # ---------------------------------------------------------------------------
+  # Airflow ≈ ECS Fargate + EFS stand-in
+  # DAGs/logs: apps/airflow/ 
+  # ---------------------------------------------------------------------------
+  airflow-init:
+    image: apache/airflow:2.9.3-python3.12
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        pip install --quiet psycopg2-binary boto3 &&
+        airflow db migrate &&
+        airflow users create --username admin --password admin \
+          --firstname A --lastname A --role Admin --email a@a.com || true
+    environment: *airflow_env
+    volumes: *airflow_volumes
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres-dw:
+        condition: service_healthy
+
+  airflow-webserver:
+    image: apache/airflow:2.9.3-python3.12
+    container_name: airflow-webserver-integrador
+    command: webserver
+    ports:
+      - "8080:8080"
+    environment: *airflow_env
+    volumes: *airflow_volumes
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres-dw:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.3-python3.12
+    container_name: airflow-scheduler-integrador
+    command: scheduler
+    environment: *airflow_env
+    volumes: *airflow_volumes
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres-dw:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ---------------------------------------------------------------------------
+  # ALB stand-in ≈ entrada pública  (Hobby no tiene ELBv2)
+  # Postman → :8088 → Lambda en LocalStack
+  # ---------------------------------------------------------------------------
+  alb-standin:
+    build:
+      context: ./apps/api/alb_standin
+      dockerfile: Dockerfile
+    image: tp-alb-standin:latest
+    container_name: alb-standin-integrador
+    ports:
+      - "8088:8088"
+    environment:
+      LOCALSTACK_ENDPOINT: http://localstack-integrador:4566
+      LAMBDA_FUNCTION_NAME: tp-gold-api
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      PORT: "8088"
+    depends_on:
+      localstack-integrador:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # pgAdmin — UI para Postgres del lab (orígenes + RDS MiniStack)
+  # Login: http://localhost:5050  →  admin@tp.local / admin
+  # Servers prearmados: bronce / dw(Airflow) / erp. RDS: dwadmin + secret dw/rds-master.
+  # ---------------------------------------------------------------------------
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: pgadmin-integrador
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@tp.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      PGADMIN_LISTEN_PORT: "80"
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      - ./ops/pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./ops/pgadmin/pgpass:/tmp/pgpass:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres-bronce:
+        condition: service_healthy
+      postgres-dw:
+        condition: service_healthy
+      postgres-erp:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        cp /tmp/pgpass /tmp/pgpass.chmod
+        chown 5050:5050 /tmp/pgpass.chmod
+        chmod 600 /tmp/pgpass.chmod
+        export PGPASSFILE=/tmp/pgpass.chmod
+        exec /entrypoint.sh
+
+  # ---------------------------------------------------------------------------
+  # Toolbox OpenTofu — NO arranca con up -d (profile iac)
+  # ---------------------------------------------------------------------------
+  tp-iac:
+    profiles: ["iac"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: tp-integrador-iac:latest
+    container_name: tp-integrador-iac
+    working_dir: /workspace
+    environment:
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+      LOCALSTACK_ENDPOINT: http://localstack-integrador:4566
+      MINISTACK_ENDPOINT: http://ministack-integrador:4566
+      MINIO_ENDPOINT: http://s3-soporte:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      TF_VAR_localstack_endpoint: http://localstack-integrador:4566
+      TF_VAR_ministack_endpoint: http://ministack-integrador:4566
+      TF_VAR_minio_endpoint: http://s3-soporte:9000
+      TF_VAR_minio_access_key: ${MINIO_ROOT_USER:-minioadmin}
+      TF_VAR_minio_secret_key: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      TF_VAR_repo_root: ".."
+    volumes:
+      - ./infra:/workspace/infra
+      - ./apps:/workspace/apps
+      - ./data:/workspace/data:ro
+      - ./docker/entrypoint.sh:/usr/local/bin/entrypoint-iac.sh:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      localstack-integrador:
+        condition: service_healthy
+      ministack-integrador:
+        condition: service_healthy
+      s3-soporte:
+        condition: service_healthy
+
 volumes:
   postgres-data-bronce:
   postgres-data-dw:
@@ -154,3 +349,4 @@ volumes:
   redis-data:
   localstack-data:
   ministack-data:
+  pgadmin-data:
