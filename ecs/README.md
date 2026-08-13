@@ -24,8 +24,13 @@ $env:AWS_SECRET_ACCESS_KEY = "test"
 $env:AWS_DEFAULT_REGION = "us-east-1"
 $env:PYTHONIOENCODING = "utf-8"
 
+# Opción A — Python full
 python ecs/ecs_demo.py           # camino A
 python ecs/ecs_demo.py --erp     # camino A + B (ERP en EFS)
+
+# Opción B — OpenTofu + runtime
+cd ecs/iac; tofu apply; cd ../..
+python ecs/ecs_demo.py --skip-infra
 # UI http://localhost:8080  admin/admin
 ```
 
@@ -36,7 +41,8 @@ API gold (siguiente): `python lambda/lambda_demo.py`
 | Archivo | Rol |
 |---|---|
 | `lab-09b-tp.md` | Guía comentada (qué / por qué) |
-| `ecs_demo.py` | Demo camino A |
+| `ecs_demo.py` | Demo camino A (+ `--skip-infra` tras IaC) |
+| `iac/` | OpenTofu: IAM + stand-in + secret origen |
 | `docker-compose.airflow.yaml` | ≈ Fargate |
 | `efs-standin/dags/` | DAGs (demo + ERP + gold) |
 | `IAM-NOTES.md` / policies | Modelo IAM |

@@ -83,6 +83,15 @@ Secuencia:
 8. Verificar privilegios
 9. Snapshot RDS (MiniStack) + `pg_dump` → **MinIO** `s3://snapshot-data-lake/...`
 
+**Alternativa OpenTofu** (misma infra declarativa; demos en Python):
+
+| Capa | Herramienta |
+|---|---|
+| Infra (pasos 1–7: instancia, secrets, seed) | `cd rds/iac && tofu apply` |
+| Demos (pasos 8–9) | `python rds/rds_tp_demo.py --skip-infra` |
+
+Detalle en `rds/iac/README.md`. No corras infra Python y OpenTofu a la vez sin limpiar.
+
 Output esperado (extracto):
 
 ```text
@@ -236,7 +245,7 @@ secret = secretsmanager.get_secret_value(SecretId="dw/rds-api")
 
 ## Checkpoint
 
-- [ ] `python rds/rds_tp_demo.py` termina sin error
+- [ ] `python rds/rds_tp_demo.py` **o** `tofu apply` en `rds/iac` + `--skip-infra` termina sin error
 - [ ] MiniStack: `tp-dw-db` available + secrets `dw/rds-*`
 - [ ] MinIO: buckets lake listables; objeto en `s3://snapshot-data-lake/rds/tp-dw-db/`
 - [ ] `\dn` muestra `bronce` y `gold`
@@ -253,5 +262,6 @@ secret = secretsmanager.get_secret_value(SecretId="dw/rds-api")
 |---|---|
 | `rds_tp_config.json` | Parámetros de instancia, secrets, subnet group, bucket snapshot |
 | `seed_tp.sql` | Schemas, roles, GRANTs, bronce staging + Modelo_DW en gold |
-| `rds_tp_demo.py` | Orquestación end-to-end |
+| `rds_tp_demo.py` | Orquestación end-to-end (o `--skip-infra` tras IaC) |
+| `iac/` | OpenTofu lab-08-tp (instancia + secrets + seed opcional) |
 | `lab-08.md` | Lab del curso (referencia; no pisar) |

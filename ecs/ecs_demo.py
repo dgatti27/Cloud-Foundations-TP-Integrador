@@ -37,8 +37,12 @@ Uso
     # Prereqs: labs 04, 07-v2, 08-tp ya corridos; compose base up.
     python ecs/ecs_demo.py              # camino A (demo conectividad)
     python ecs/ecs_demo.py --erp        # camino A + B (ERP→bronce→gold vía EFS)
+    python ecs/ecs_demo.py --skip-infra # tras tofu apply en ecs/iac (solo runtime)
     python ecs/ecs_demo.py --skip-runtime
     python ecs/ecs_demo.py --cleanup
+
+Infra alternativa (OpenTofu): ecs/iac — IAM execution/task, stand-in marker,
+secret origen. Runtime (Compose/DAG) siempre es este script o el CLI manual.
 """
 
 from __future__ import annotations
@@ -151,7 +155,8 @@ def check_prereqs() -> None:
         print(f"  ✓ app-role: {arn}")
     except ClientError as e:
         raise SystemExit(
-            "Falta app-role (lab 04). Corré: python iam/iam_demo.py\n"
+            "Falta app-role (lab 04). Corré: cd iam/iac; tofu apply  "
+            "o python iam/iam_demo.py\n"
             f"  detalle: {e}"
         ) from e
 
@@ -630,6 +635,15 @@ def main() -> int:
         description="Lab 09b — Airflow ETL → bronce (stand-in Fargate + EFS)"
     )
     parser.add_argument(
+        "--skip-infra",
+        action="store_true",
+        help=(
+            "No crear IAM / dirs EFS / secret origen "
+            "(ya aplicados con OpenTofu en ecs/iac). Solo runtime: "
+            "Compose, trigger DAG, verify, --erp."
+        ),
+    )
+    parser.add_argument(
         "--skip-runtime",
         action="store_true",
         help="Solo prereqs + IAM + EFS dirs + secret (sin Compose/DAG)",
@@ -649,12 +663,27 @@ def main() -> int:
     print("=== Lab 09b — ECS/Airflow stand-in → bronce ===\n")
     print(f"  LocalStack (IAM/VPC): {ENDPOINT_LOCALSTACK}")
     print(f"  MiniStack  (Secrets): {ENDPOINT_MINISTACK}")
-    print(f"  Compose:              {COMPOSE_FILE.relative_to(ROOT)}\n")
+    print(f"  Compose:              {COMPOSE_FILE.relative_to(ROOT)}")
+    if args.skip_infra:
+        print("  modo:                --skip-infra (IaC = ecs/iac)\n")
+    elif args.skip_runtime:
+        print("  modo:                --skip-runtime (sin Compose/DAG)\n")
+    else:
+        print("  modo:                full demo (infra + runtime)\n")
 
     check_prereqs()
-    step_iam()
-    step_efs_standin()
-    step_origen_secret()
+
+    if not args.skip_infra:
+        step_iam()
+        step_efs_standin()
+        step_origen_secret()
+    else:
+        print("\n1–3. Infra omitida (esperada vía tofu apply en ecs/iac)")
+        # Sanity: DAGs deben existir en el stand-in
+        dag_file = EFS_DAGS / "etl_bronce_origen_demo.py"
+        if not dag_file.is_file():
+            raise SystemExit(f"Falta DAG demo en {dag_file}")
+        print(f"  · stand-in OK: {dag_file.relative_to(ROOT)}")
 
     run_id: str | None = None
     if not args.skip_runtime:

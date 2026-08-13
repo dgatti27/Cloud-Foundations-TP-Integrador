@@ -14,6 +14,9 @@ python finops/finops_demo.py
 python finops/pricing.py --budget 300
 python finops/pricing.py --services services.endpoints.json --budget 300
 
+# Inventario IaC (Hobby) / Budget en AWS con create_budget=true
+cd finops/iac; Copy-Item terraform.tfvars.example terraform.tfvars; tofu apply; cd ../..
+
 # Workbook entregable
 Copy-Item finops\estimate.md docs\costos-proyecto.md
 ```
@@ -23,14 +26,15 @@ Copy-Item finops\estimate.md docs\costos-proyecto.md
 | Archivo | Rol |
 |---|---|
 | `lab-10-tp.md` | Guía TP (qué / por qué) |
-| `finops_demo.py` | Ejecución automatizada |
+| `finops_demo.py` | Ejecución automatizada (estimación) |
+| `pricing.py` | Estimador local (stdlib) |
 | `services.json` | Baseline costos to-be |
 | `services.endpoints.json` | Escenario NAT + VPC endpoints |
-| `pricing.py` | Estimador local (stdlib) |
 | `estimate.md` | Workbook Q1–Q14 |
 | `budget.json` | Budget **USD 300** (`tp-integrador-monthly-budget`) |
 | `notify.json` | Alertas 80% / 100% (editá el mail) |
-| `create-budget.sh` | Alta Budget en AWS real |
+| `create-budget.sh` | Alta Budget en AWS real (bash) |
+| [`iac/`](./iac/README.md) | OpenTofu: inventario + Budget opcional |
 
 ## LocalStack
 

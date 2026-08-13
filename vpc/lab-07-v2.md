@@ -15,6 +15,16 @@ ETL → EFS (NFS en compute)
 > **LocalStack Community vs AWS real**  
 > La topología (VPC, subredes, route tables, IGW, NAT, SGs, endpoints) se crea y se inspecciona en Community. El tráfico real de paquetes (NAT, ALB balanceando, Fargate saliendo a Internet) se valida mejor en AWS real / Learner Lab.
 
+### Tres caminos (mismo alcance)
+
+| Camino | Infra VPC / SG / NAT / vpce | Inventario |
+|---|---|---|
+| CLI (`lab-07-v2.md` pasos) | A mano | Variables de shell |
+| Bash | `bash vpc/provision_vpc_v2.sh` (**se preserva**) | Echo al final |
+| **OpenTofu** | `cd vpc/iac && tofu apply` | Escribe `vpc/vpc_config.json` |
+
+El script bash **no se elimina**: sigue siendo el espejo de los comandos del lab. OpenTofu declara el estado deseado e idempotencia; no mezcles ambos sin `destroy`/limpieza previa.
+
 ---
 
 ## Por qué este lab (v2)

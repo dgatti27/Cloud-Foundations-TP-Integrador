@@ -1,10 +1,17 @@
 # Lambda API → GOLD (lab-api)
 
 Lab: [`lab-api-tp.md`](./lab-api-tp.md)  
-Script: [`lambda_demo.py`](./lambda_demo.py)
+Script: [`lambda_demo.py`](./lambda_demo.py)  
+IaC: [`iac/`](./iac/README.md)
 
 ```powershell
+# Opción A — Python full
 python lambda/lambda_demo.py
+
+# Opción B — OpenTofu + runtime
+cd lambda/iac; tofu apply; cd ../..
+python lambda/lambda_demo.py --skip-infra
+
 # Postman GET http://localhost:8088/gold/query?table=dim_cliente&columns=nombre,email&condition=segmento=retail
 # Logs: CW /aws/lambda/tp-gold-api → MinIO s3://backup-data-lake/logs/lambda/tp-gold-api/
 ```
@@ -25,4 +32,6 @@ python lambda/lambda_demo.py
 | `handler.py` | Entry Lambda |
 | `query_gold.py` | SELECT seguro gold |
 | `*_policy.json` / `trust_lambda.json` | IAM |
+| `iac/` | OpenTofu: IAM + función + log group |
 | `docker-compose.alb.yaml` | ALB stand-in |
+| `lambda_demo.py` | Demo full o `--skip-infra` |

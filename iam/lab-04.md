@@ -204,7 +204,7 @@ aws --endpoint-url http://localhost:9000 --region us-east-1 s3 ls s3://staging-d
 
 ---
 
-## Paso 8 — Script automatizado
+## Paso 8 — Script automatizado e IaC
 
 El script `iam/iam_demo.py` hace los pasos 2–7 en secuencia:
 
@@ -213,6 +213,15 @@ python iam/iam_demo.py
 ```
 
 Sirve como referencia y para reproducir el setup en un entorno limpio.
+
+**Alternativa OpenTofu** (misma infra declarativa; demos en Python):
+
+| Capa | Herramienta |
+|---|---|
+| Infra (pasos 2–4, 6) | `cd iam/iac && tofu apply` |
+| Demos (pasos 5 y 7) | `python iam/iam_demo.py --skip-infra` |
+
+Detalle en `iam/iac/README.md`. No corras infra Python y OpenTofu a la vez sin limpiar.
 
 ---
 

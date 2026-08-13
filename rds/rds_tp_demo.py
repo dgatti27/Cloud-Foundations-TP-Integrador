@@ -18,12 +18,17 @@ Endpoints:
                       # S3 de LocalStack queda comentado en compose (no usar para el lake)
   MiniStack  :4567  → RDS (Postgres real) + Secrets Manager (credenciales DB)
 
+Infra alternativa (OpenTofu): rds/iac — subnet group, instancia, secrets, seed.
+Con IaC, usá --skip-infra para solo demos 8–9 (no pelear con el state).
+
 Uso:
     python rds/rds_tp_demo.py
+    python rds/rds_tp_demo.py --skip-infra
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import secrets as pysecrets
@@ -553,14 +558,40 @@ def take_snapshot_and_upload_s3(
     return snap_id, s3_uri
 
 
+def load_master_password(sm) -> str:
+    """Lee password master desde Secrets Manager (modo IaC / --skip-infra)."""
+    name = CFG["secrets"]["master"]["Name"]
+    existing = json.loads(sm.get_secret_value(SecretId=name)["SecretString"])
+    print(f"  secret '{name}' leído (password master desde MiniStack)")
+    return existing["password"]
+
+
 # ---------------------------------------------------------------------------
 # main — orquestación de los pasos 1–9 + resumen de inspección
 # ---------------------------------------------------------------------------
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Lab 08-TP — RDS dw (bronce + gold) MiniStack + MinIO"
+    )
+    parser.add_argument(
+        "--skip-infra",
+        action="store_true",
+        help=(
+            "No crear secret/subnet group/instancia/seed/secrets app "
+            "(ya aplicados con OpenTofu en rds/iac). Solo demos: "
+            "verify privilegios + snapshot API + pg_dump→MinIO."
+        ),
+    )
+    args = parser.parse_args()
+
     print("=== TP Integrador — RDS dw (bronce + gold) ===\n")
     print(f"  MinIO      (S3 lake):  {ENDPOINT_MINIO}")
     print(f"  LocalStack (EC2/VPC):  {ENDPOINT_LOCALSTACK}")
-    print(f"  MiniStack  (RDS+SM):   {ENDPOINT_MINISTACK}\n")
+    print(f"  MiniStack  (RDS+SM):   {ENDPOINT_MINISTACK}")
+    if args.skip_infra:
+        print("  modo:               --skip-infra (IaC = rds/iac)\n")
+    else:
+        print("  modo:               full demo (infra + demos)\n")
 
     # Tres clientes: red (LocalStack) | lake (MinIO) | DB+secrets (MiniStack)
     ec2 = client_localstack("ec2")
@@ -568,28 +599,47 @@ def main() -> int:
     rds = client_ministack("rds")
     sm = client_ministack("secretsmanager")
 
-    print("1. Secret master en Secrets Manager (MiniStack)")
-    master_password = create_master_secret(sm)
+    identifier = CFG["db_instance"]["Identifier"]
+    db_sg_id = "(sg-rds)"
 
-    print("\n2. Recursos de red en LocalStack (reuso lab 07-v2 — NO se recrean)")
-    _vpc_id, subnets, db_sg_id = get_vpc_resources(ec2)
+    if not args.skip_infra:
+        print("1. Secret master en Secrets Manager (MiniStack)")
+        master_password = create_master_secret(sm)
 
-    print("\n3. DB subnet group Multi-AZ en MiniStack (IDs de subnets LocalStack)")
-    subnet_group = create_db_subnet_group(rds, subnets)
+        print("\n2. Recursos de red en LocalStack (reuso lab 07-v2 — NO se recrean)")
+        _vpc_id, subnets, db_sg_id = get_vpc_resources(ec2)
 
-    print("\n4. create-db-instance — MiniStack levanta postgres real")
-    identifier = create_db_instance(rds, db_sg_id, subnet_group, master_password)
+        print("\n3. DB subnet group Multi-AZ en MiniStack (IDs de subnets LocalStack)")
+        subnet_group = create_db_subnet_group(rds, subnets)
 
-    print("\n5. Esperar a 'available'")
-    inst = wait_available(rds, identifier)
-    endpoint_host = inst.get("Endpoint", {}).get("Address", "")
+        print("\n4. create-db-instance — MiniStack levanta postgres real")
+        identifier = create_db_instance(rds, db_sg_id, subnet_group, master_password)
 
-    print("\n6. Aplicar seed_tp.sql (schemas + roles + tablas)")
-    apply_seed(identifier, master_password)
+        print("\n5. Esperar a 'available'")
+        inst = wait_available(rds, identifier)
+        endpoint_host = inst.get("Endpoint", {}).get("Address", "")
 
-    print("\n7. Passwords de app roles + secrets ETL/API (MiniStack)")
-    configure_app_roles(sm, identifier, master_password, endpoint_host)
-    show_secret_map(endpoint_host)
+        print("\n6. Aplicar seed_tp.sql (schemas + roles + tablas)")
+        apply_seed(identifier, master_password)
+
+        print("\n7. Passwords de app roles + secrets ETL/API (MiniStack)")
+        configure_app_roles(sm, identifier, master_password, endpoint_host)
+        show_secret_map(endpoint_host)
+    else:
+        print("1–7. Infra omitida (esperada vía tofu apply en rds/iac)")
+        print("\n1b. Password master desde Secrets Manager")
+        master_password = load_master_password(sm)
+
+        print("\n2b. Lookup red (informativo)")
+        try:
+            _vpc_id, _subnets, db_sg_id = get_vpc_resources(ec2)
+        except SystemExit as e:
+            print(f"  · lookup red omitido: {e}")
+
+        print("\n5b. Confirmar instancia available")
+        inst = wait_available(rds, identifier)
+        endpoint_host = inst.get("Endpoint", {}).get("Address", "")
+        show_secret_map(endpoint_host)
 
     print("\n8. Verificar privilegios y filas demo")
     verify_access(identifier, master_password)

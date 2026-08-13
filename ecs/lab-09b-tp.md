@@ -74,11 +74,21 @@ $env:PYTHONIOENCODING = "utf-8"
 python ecs/ecs_demo.py           # camino A (demo conectividad)
 python ecs/ecs_demo.py --erp     # camino A + B (ERP→bronce→gold vía EFS)
 # Flags:
+#   python ecs/ecs_demo.py --skip-infra     # tras tofu apply en ecs/iac
 #   python ecs/ecs_demo.py --skip-runtime
 #   python ecs/ecs_demo.py --cleanup
 ```
 
 `ecs_demo.py` automatiza IAM, EFS stand-in, Compose, triggers y (con `--erp`) los DAGs del camino B.
+
+**Alternativa OpenTofu** (modelo IAM + stand-in + secret; runtime en Python):
+
+| Capa | Herramienta |
+|---|---|
+| Infra (pasos 1–2 + secret origen) | `cd ecs/iac && tofu apply` |
+| Runtime (Compose / DAG / verify / `--erp`) | `python ecs/ecs_demo.py --skip-infra` |
+
+Detalle en `ecs/iac/README.md`. No mezcles IAM Python y OpenTofu sin limpiar.
 
 ### Opción B — Manual + camino ERP
 

@@ -160,16 +160,30 @@ El endpoint documenta el camino privado a S3 en AWS. En el lab el storage operat
 
 ## Cómo provisionar
 
-Seguir los pasos de [`lab-07-v2.md`](./lab-07-v2.md) o el script completo al final de ese documento.
+Tres caminos (mismo alcance de red):
 
-```bash
-# Ejemplo (Git Bash / WSL), con LocalStack:
-export AWS_CLI=awslocal
-export AWS_DEFAULT_REGION=us-east-1
-# bash vpc/provision_vpc_v2.sh   # si exportaste el script del lab
+| Camino | Cómo |
+|---|---|
+| **OpenTofu** | `cd vpc/iac && tofu apply` → también escribe `vpc_config.json` |
+| **Bash** | `bash vpc/provision_vpc_v2.sh` (se preserva; awslocal paso a paso) |
+| **CLI manual** | Pasos de [`lab-07-v2.md`](./lab-07-v2.md) |
+
+```powershell
+# A) IaC (recomendado para inventario idempotente)
+cd vpc/iac
+Copy-Item terraform.tfvars.example terraform.tfvars
+tofu init; tofu apply
+Get-Content ..\vpc_config.json
+
+# B) Bash (Git Bash / WSL)
+$env:AWS_CLI = "awslocal"
+$env:AWS_DEFAULT_REGION = "us-east-1"
+# bash vpc/provision_vpc_v2.sh
 ```
 
-Prerrequisitos: LocalStack arriba, lab 04 (IAM) y lab 06 (buckets lake) corridos.
+Prerrequisitos: LocalStack arriba. Labs 04 (IAM) y 06 (buckets lake) recomendados para el resto del TP.
+
+> No corras OpenTofu y el bash **a la vez** sin limpiar: duplicás VPC/subnets.
 
 ---
 

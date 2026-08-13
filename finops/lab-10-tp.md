@@ -33,6 +33,16 @@ python finops_demo.py
 
 `finops_demo.py` corre el estimador, muestra top drivers y valida `budget.json` / `notify.json`.
 
+**OpenTofu (Budget como código):**
+
+| Capa | Herramienta |
+|---|---|
+| Estimación (local) | `finops_demo.py` / `pricing.py` — **se preserva** |
+| Inventario / Budget | `cd finops/iac && tofu apply` (`create_budget=false` en Hobby) |
+| Budget AWS real | `create_budget=true` + mail real, o `create-budget.sh` |
+
+Detalle en `finops/iac/README.md`.
+
 ---
 
 ## Prerequisitos
@@ -184,10 +194,11 @@ Resultado: ver docs/costos-proyecto.md (Q1–Q14).
 |---|---|
 | `lab-10-tp.md` | Esta guía |
 | `lab-10.md` | Lab genérico de clase (referencia) |
-| `finops_demo.py` | Script de ejecución |
+| `finops_demo.py` | Script de ejecución (estimación) |
 | `pricing.py` | Estimador |
 | `services.json` | Baseline TP |
 | `services.endpoints.json` | Escenario endpoints |
 | `estimate.md` | Workbook entregable |
 | `budget.json` / `notify.json` | AWS Budgets |
-| `create-budget.sh` | Alta del budget |
+| `create-budget.sh` | Alta del budget (bash) |
+| `iac/` | OpenTofu: inventario + Budget opcional |

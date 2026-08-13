@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # VPC Multi-AZ — TP Integrador (lab-07-v2)
+#
+# Camino CLI/bash (pedagógico). Alternativa declarativa:
+#   cd vpc/iac && tofu apply   → también genera vpc_config.json
+# No corras este script y OpenTofu a la vez sin limpiar (duplicás VPC).
+#
 set -euo pipefail
 
 REGION="${AWS_DEFAULT_REGION:-us-east-1}"

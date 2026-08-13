@@ -1,17 +1,36 @@
-region         = "us-east-1"
+# =============================================================================
+# terraform.tfvars.example — Plantilla de valores (copiar a terraform.tfvars)
+# -----------------------------------------------------------------------------
+# terraform.tfvars NO se commitea (.gitignore): puede tener secrets.
+# Este .example SÍ va al repo como referencia del lab.
+#
+#   Copy-Item terraform.tfvars.example terraform.tfvars
+# =============================================================================
+
+# Región formal del provider (MinIO la ignora)
+region = "us-east-1"
+
+# Endpoint del contenedor s3-soporte
 minio_endpoint = "http://localhost:9000"
+
+# Credenciales MinIO — descomentar si no usás los defaults de variables.tf
 # minio_access_key = "minioadmin"
 # minio_secret_key = "minioadmin"
 
+# Buckets del lake (lab 06). Cada uno necesita s3/bucket_policy_<nombre>.json
 lake_buckets = [
   "backup-data-lake",
   "snapshot-data-lake",
   "staging-data-lake",
 ]
 
-enable_encryption  = true
+# true = SSE-S3; false = si MinIO no tiene KMS configurado
+enable_encryption = true
+
+# true = sube s3/README.md a backup-data-lake/raw/README.md
 upload_seed_object = true
 
+# Tags FinOps / identificación (en AWS real; MinIO puede ignorarlos)
 tags = {
   Project = "TP-Integrador"
   Lab     = "06"

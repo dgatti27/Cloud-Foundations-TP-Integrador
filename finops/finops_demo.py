@@ -2,14 +2,15 @@
 Lab 10 TP — FinOps demo: estimar costos del stack Integrador.
 
 Orquesta el estimador local (pricing.py) + validación de Budgets (JSON)
-sin llamar a la nube. Budgets reales → create-budget.sh en AWS / Learner Lab.
+sin llamar a la nube. Budgets reales → finops/iac (create_budget=true) o
+create-budget.sh en AWS / Learner Lab.
 
 Qué hace
 --------
 1) Lee services.json (o --endpoints / --services) y corre compute_row + report
 2) Valida budget.json / notify.json (mail placeholder, monto)
 3) Mapea top drivers de costo → labs del TP (RDS, NAT, Fargate, ALB…)
-4) Remite a estimate.md / create-budget.sh para el entregable
+4) Remite a estimate.md / finops/iac / create-budget.sh para el entregable
 
 Uso
 ---
@@ -136,7 +137,8 @@ def main() -> int:
     print("\n=== Siguiente ===")
     print("  Workbook: Copy-Item finops\\estimate.md docs\\costos-proyecto.md")
     print("  Guía:     finops/lab-10-tp.md")
-    print("  Budget:   editá notify.json → bash create-budget.sh  (AWS real)")
+    print("  IaC:      cd finops/iac; tofu apply   # inventario; create_budget=true en AWS")
+    print("  Budget:   editá notify.json → tofu apply (create_budget) o bash create-budget.sh")
     print("=== FinOps demo OK ===")
     return 0
 

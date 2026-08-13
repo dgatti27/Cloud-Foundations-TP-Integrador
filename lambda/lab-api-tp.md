@@ -120,6 +120,7 @@ $env:PYTHONIOENCODING = "utf-8"
 #   python ecs/ecs_demo.py --erp
 
 python lambda/lambda_demo.py
+# python lambda/lambda_demo.py --skip-infra     # tras tofu apply en lambda/iac
 # python lambda/lambda_demo.py --skip-alb
 # python lambda/lambda_demo.py --skip-logs-export
 # python lambda/lambda_demo.py --logs-export-only
@@ -127,6 +128,15 @@ python lambda/lambda_demo.py
 ```
 
 El script hace: prereqs → IAM → zip/deploy Lambda (VpcConfig) → ALB stand-in → invoke + GET de prueba → **export CloudWatch Logs → MinIO**.
+
+**Alternativa OpenTofu** (IAM + función; runtime en Python):
+
+| Capa | Herramienta |
+|---|---|
+| Infra (pasos 1–2) | `cd lambda/iac && tofu apply` |
+| Runtime (ALB / invoke / export logs) | `python lambda/lambda_demo.py --skip-infra` |
+
+Detalle en `lambda/iac/README.md`.
 
 ---
 

@@ -9,12 +9,19 @@ Provisiona la RDS del proyecto: **una instancia PostgreSQL Multi-AZ** con schema
 | [`lab-08-tp.md`](./lab-08-tp.md) | Guía paso a paso del TP |
 | [`rds_tp_config.json`](./rds_tp_config.json) | Parámetros declarativos |
 | [`seed_tp.sql`](./seed_tp.sql) | Schemas, roles, GRANTs, bronce staging + Modelo_DW (gold) |
-| [`rds_tp_demo.py`](./rds_tp_demo.py) | Orquestación end-to-end |
+| [`rds_tp_demo.py`](./rds_tp_demo.py) | Orquestación end-to-end (o demos con `--skip-infra`) |
+| [`iac/`](./iac/README.md) | OpenTofu: instancia + secrets + seed |
 
 ```bash
 # Prereqs: VPC en LocalStack :4566, MiniStack :4567, MinIO :9000
 docker compose up -d localstack-integrador ministack-integrador s3-soporte
+
+# Opción A — Python full
 python rds/rds_tp_demo.py
+
+# Opción B — OpenTofu + demos
+cd rds/iac && tofu apply && cd ../..
+python rds/rds_tp_demo.py --skip-infra
 ```
 
 ### Endpoints (importante)

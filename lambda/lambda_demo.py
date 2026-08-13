@@ -13,10 +13,14 @@ Qué hace (pasos)
 Uso
 ---
     python lambda/lambda_demo.py
+    python lambda/lambda_demo.py --skip-infra   # tras tofu apply en lambda/iac
     python lambda/lambda_demo.py --skip-alb
     python lambda/lambda_demo.py --skip-logs-export
     python lambda/lambda_demo.py --logs-export-only
     python lambda/lambda_demo.py --cleanup
+
+Infra alternativa (OpenTofu): lambda/iac — IAM + función + log group.
+Runtime (ALB stand-in, invoke, export logs) → este script con --skip-infra.
 """
 
 from __future__ import annotations
@@ -119,7 +123,8 @@ def check_prereqs() -> dict:
         print("  ✓ secret dw/rds-api")
     except ClientError as e:
         raise SystemExit(
-            "Falta dw/rds-api (lab 08-tp). Corré: python rds/rds_tp_demo.py\n"
+            "Falta dw/rds-api (lab 08-tp). Corré: cd rds/iac; tofu apply  "
+            "o python rds/rds_tp_demo.py\n"
             f"  {e}"
         ) from e
     iam = ls("iam")
@@ -501,6 +506,15 @@ def step_cleanup() -> None:
 # ---------------------------------------------------------------------------
 def main() -> int:
     parser = argparse.ArgumentParser(description="Lab API — Lambda gold GET + ALB stand-in")
+    parser.add_argument(
+        "--skip-infra",
+        action="store_true",
+        help=(
+            "No crear IAM / deploy Lambda "
+            "(ya aplicados con OpenTofu en lambda/iac). Solo runtime: "
+            "ALB stand-in, invoke, export logs→MinIO."
+        ),
+    )
     parser.add_argument("--skip-alb", action="store_true", help="No levantar alb-standin")
     parser.add_argument(
         "--skip-logs-export",
@@ -518,7 +532,11 @@ def main() -> int:
     print("=== Lab API — Lambda → gold (ALB stand-in) ===\n")
     print(f"  LocalStack: {ENDPOINT_LS}")
     print(f"  MiniStack:  {ENDPOINT_MS}")
-    print(f"  MinIO:      {ENDPOINT_MINIO}\n")
+    print(f"  MinIO:      {ENDPOINT_MINIO}")
+    if args.skip_infra:
+        print("  modo:       --skip-infra (IaC = lambda/iac)\n")
+    else:
+        print()
 
     if args.logs_export_only:
         s3_uri = step_export_logs_to_s3()
@@ -526,8 +544,20 @@ def main() -> int:
         return 0 if s3_uri else 1
 
     cfg = check_prereqs()
-    role_arn = step_iam(cfg)
-    step_deploy_lambda(role_arn, cfg)
+
+    if not args.skip_infra:
+        role_arn = step_iam(cfg)
+        step_deploy_lambda(role_arn, cfg)
+    else:
+        print("\n1–2. Infra omitida (esperada vía tofu apply en lambda/iac)")
+        try:
+            ls("lambda").get_function(FunctionName=FUNCTION_NAME)
+            print(f"  · función {FUNCTION_NAME} presente")
+        except ClientError as e:
+            raise SystemExit(
+                f"Falta {FUNCTION_NAME}. Corré: cd lambda/iac; tofu apply\n  {e}"
+            ) from e
+
     if not args.skip_alb:
         step_alb_up()
     step_invoke()

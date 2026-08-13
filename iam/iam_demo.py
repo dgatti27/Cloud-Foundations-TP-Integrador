@@ -12,10 +12,15 @@ Automatiza los pasos 2-7 de iam/lab-04.md:
 IAM/STS → LocalStack (:4566).
 Buckets → MinIO (:9000). LocalStack S3 queda comentado (decisión 002).
 
+Infra alternativa (OpenTofu): iam/iac — grupos/policies/users/roles/buckets.
+Con IaC, usá --skip-infra para solo demos 5 y 7 (no pelear con el state).
+
 Uso:
     python iam/iam_demo.py
+    python iam/iam_demo.py --skip-infra
 """
 
+import argparse
 import os
 from pathlib import Path
 
@@ -248,37 +253,68 @@ def assume_role_and_use_s3(sts, role_arn: str, session_name: str):
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Lab 04 — IAM demo (LocalStack) + buckets MinIO"
+    )
+    parser.add_argument(
+        "--skip-infra",
+        action="store_true",
+        help=(
+            "No crear buckets/grupos/policies/users/roles "
+            "(ya aplicados con OpenTofu en iam/iac). Solo demos: "
+            "access key de larga duración + AssumeRole STS + list MinIO."
+        ),
+    )
+    args = parser.parse_args()
+
     print("=== Lab 04 — IAM demo ===\n")
     print("AVISO: LocalStack Community no enforcea policies (Deny no bloquea).")
     print("       Practicamos la mecánica: crear, adjuntar, asumir.")
     print(f"       Buckets → MinIO {S3_ENDPOINT} | IAM/STS → LocalStack {ENDPOINT}")
-    print("       LocalStack S3 comentado (compose + este script).\n")
+    print("       LocalStack S3 comentado (compose + este script).")
+    if args.skip_infra:
+        print("       modo: --skip-infra (IaC = iam/iac)\n")
+    else:
+        print("       modo: full demo (infra + demos)\n")
 
     iam = make_client("iam")
     s3 = make_s3_minio()
     # s3 = make_s3_localstack()  # NO usar en el TP
     sts = make_client("sts")
 
-    print("1. Buckets S3 de referencia (MinIO)")
-    ensure_buckets(s3)
+    policy_arns = {}
+    role_arns = {}
 
-    print("\n2. Grupos + policies administradas")
-    policy_arns = create_groups_with_policies(iam)
+    if not args.skip_infra:
+        print("1. Buckets S3 de referencia (MinIO)")
+        ensure_buckets(s3)
 
-    print("\n3. Usuarios -> grupos")
-    create_users(iam)
+        print("\n2. Grupos + policies administradas")
+        policy_arns = create_groups_with_policies(iam)
+
+        print("\n3. Usuarios -> grupos")
+        create_users(iam)
+    else:
+        print("1–3. Infra omitida (esperada vía tofu apply en iam/iac)")
+        for group, (policy_name, _) in GROUPS.items():
+            policy_arns[group] = f"arn:aws:iam::000000000000:policy/{policy_name}"
 
     print("\n4. Access key de larga duración (observar el riesgo)")
     create_access_key(iam, "usuario2-ops")
 
-    print("\n5. Roles con trust policy (ECS / RDS export) + inline policy mínima")
-    role_arns = create_roles(iam)
+    if not args.skip_infra:
+        print("\n5. Roles con trust policy (ECS / RDS export) + inline policy mínima")
+        role_arns = create_roles(iam)
+    else:
+        print("\n5. Roles omitidos (IaC); se resuelven ARNs por nombre")
+        for role_name in ROLES:
+            role_arns[role_name] = iam.get_role(RoleName=role_name)["Role"]["Arn"]
 
     print("\n6. AssumeRole vía STS -> credenciales temporales")
     for role_name, (_trust, session_name) in ROLES.items():
         assume_role_and_use_s3(sts, role_arns[role_name], session_name)
 
-    print("\n=== Resumen de recursos creados ===")
+    print("\n=== Resumen ===")
     print(f"  Buckets:  {', '.join(BUCKETS)}")
     for group, arn in policy_arns.items():
         print(f"  Grupo:    {group} -> {arn}")
@@ -286,7 +322,7 @@ def main():
         print(f"  Usuario:  {username} (grupo {group})")
     for role_name, arn in role_arns.items():
         print(f"  Rol:      {role_name} -> {arn}")
-    print("\nListo. Revisá los JSON en iam/ para entender cada documento.")
+    print("\nListo. Revisá los JSON en iam/ (y iam/iac/ si usaste OpenTofu).")
 
 
 if __name__ == "__main__":
