@@ -1,7 +1,7 @@
-"""DAG ETL grupo 1: origen demo -> schema bronce (tp-dw-db).
+"""DAG de comprobación: origen demo → RDS schema bronce (conectividad).
 
-Stand-in Hobby de Fargate+EFS. En AWS real corre como task Fargate con el mismo
-código, montando EFS en /opt/airflow/dags y leyendo secrets con app-role.
+Stand-in Hobby de Fargate+EFS. Verifica secrets + INSERT mínimo en
+bronce.ingest_batch / bronce.raw_record. No es el ETL ERP de negocio.
 """
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ def extract_and_load_bronce(**_):
 
 
 with DAG(
-    dag_id="etl_bronce_origen_demo",
+    dag_id="etl_rds_comprobation",
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,

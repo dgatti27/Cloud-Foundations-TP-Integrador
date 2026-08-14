@@ -25,30 +25,19 @@ import re
 from typing import Any
 
 # ---------------------------------------------------------------------------
-# Allowlist de tablas gold (Modelo_DW / seed RDS)
+# Allowlist de tablas gold (modelo TP: 6 dims + 2 facts)
 # Si no está acá → ValueError → handler responde 400. Nunca acepta bronce.*
 # ---------------------------------------------------------------------------
 GOLD_TABLES = frozenset(
     {
-        "bridge_producto_competidor",
-        "dim_campania",
-        "dim_canal",
-        "dim_categoria",
-        "dim_cliente",
-        "dim_competidor",
-        "dim_dispositivo",
         "dim_fecha",
-        "dim_geografia",
-        "dim_hora",
+        "dim_cliente",
+        "dim_producto",
+        "dim_canal",
         "dim_metodo_pago",
         "dim_moneda",
-        "dim_pagina",
-        "dim_producto",
-        "fact_precio_competencia",
-        "fact_venta_devolucion",
         "fact_venta_linea",
-        "fact_web_evento",
-        "fact_web_sesion",
+        "fact_venta_devolucion",
     }
 )
 

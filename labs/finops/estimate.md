@@ -156,7 +156,7 @@ Presupuesto vs realidad
 
 - [ ] Mail real en `notify.json` (no `you@example.com`)
 - [ ] `budget.json` Amount = **300** (o el techo que eligieron en Q9)
-- [ ] `create-budget.sh` / `finops_demo.py --create-budget` contra **AWS real** (Learner Lab)
+- [ ] `create-budget.sh` / Budget contra **AWS real**
 - [ ] Alertas 80% ACTUAL y 100% FORECASTED
 
 Hobby LocalStack: Budgets = **Pro-only** — modelar JSON; crear budget en AWS real.

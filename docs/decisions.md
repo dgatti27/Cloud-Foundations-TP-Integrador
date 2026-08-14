@@ -97,7 +97,7 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 
 - (+) `tofu apply` idempotente sobre el producto.  
 - (+) Policies y comentarios viven en los módulos.  
-- (−) Demos Python (`ecs_demo.py`, etc.) usan `--skip-infra` si el apply ya corrió.
+- (−) Demos Python (`ecs.py`, etc.) usan `--skip-infra` si el apply ya corrió.
 
 **Resultado:** única fuente IaC: `cd infra && tofu apply`.
 
@@ -202,3 +202,18 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 **Tradeoff:** email de entorno local, no de producción. Login simple para el TP.
 
 **Resultado:** Compose + `.env.example` + README. **Ajuste aplicado** tras el smoke test (era el único blocker de UI).
+
+---
+
+### 010 — Gold acotado al TP (6 dims + 2 facts)
+
+**Decision:** schema `gold` con **6 dimensiones** y **2 hechos**, no un Modelo_DW de 19 tablas.
+
+**Contexto:** el entregable demuestra ERP → bronce → gold → API. Un modelo completo diluye el TP.
+
+**Modelo:**
+- Dims: `dim_fecha`, `dim_cliente`, `dim_producto`, `dim_canal`, `dim_metodo_pago`, `dim_moneda`
+- Facts: `fact_venta_linea` (carga el ETL), `fact_venta_devolucion` (creada, carga opcional)
+- Geo y categoría embebidas en cliente/producto
+
+**Resultado:** `data/rds/seed_tp.sql` + `apps/etl/transform/to_gold.py` + allowlist en `apps/api/query_gold.py`.

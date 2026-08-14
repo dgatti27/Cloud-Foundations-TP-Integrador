@@ -136,7 +136,7 @@ Ninguna bloquea IAM / VPC / S3 / RDS / Lambda **existir** ni UIs (Airflow, ALB h
 | MinIO + `test`/`test` → `InvalidAccessKeyId` | No | `aws s3 ls` | Docs: usar `minioadmin`. No es fallo de buckets |
 | `tofu plan` 4 updates en `description` de SG | No | Idempotencia cosmética | **Ajustado:** `ignore_changes` también en `description` |
 | Warnings S3 `for_each` deprecado (provider AWS) | No | Ruido en plan | No toca runtime. Deuda provider |
-| Allowlist gold ≠ `hecho_ventas` | No | 400 en query | Tablas reales: `dim_*`, `fact_venta_linea`, … (README actualizado) |
+| Allowlist gold | No | 400 si tabla inventada | Tablas: 6 dims + 2 facts (README § Datos) |
 
 ### 3.2 Qué quedó verificado (sin ETL)
 

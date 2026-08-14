@@ -3,31 +3,53 @@ __pycache__/
 *.py[cod]
 .ruff_cache/
 .pytest_cache/
+.venv/
+venv/
 
 # Entornos y secretos
 .env
 *.env
 !.env.example
+**/_erp_secret.json
+*_erp_secret.json
 
 # Office temporales
 ~$*
 *.tmp
 
-# SO
+# SO / IDE
 .DS_Store
+.idea/
+*.swp
 
 # OpenTofu / Terraform
 **/.terraform/
 **/*.tfstate
 **/*.tfstate.*
 **/crash.log
+**/crash.*.log
+**/*.tfplan
 **/override.tf
 **/*_override.tf
-infra/generated/*
-!infra/generated/.gitkeep
 infra/*.tfvars
 !infra/terraform.tfvars.example
+
+# Salidas locales del apply (inventarios, zip Lambda, etc.)
+infra/generated/*
+!infra/generated/.gitkeep
+labs/vpc/vpc_config.json
+apps/airflow/.iac-managed
+
+# Invokes / payloads locales en la raíz (Lambda, Postman, demos)
+/out*.json
+/out-gold.json
+/event.json
+/event-gold.json
 
 # Airflow — logs runtime (symlinks rompen docker build en Windows)
 apps/airflow/logs/
 !apps/airflow/logs/.gitkeep
+
+# Capturas IaC voluminosas (tofu.log); se regeneran con test/capture-*.ps1
+# Mantener README y evidencia smoke curada en test/2026-*-smoke/
+test/iac-runs/**/tofu.log

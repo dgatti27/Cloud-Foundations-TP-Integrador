@@ -1,11 +1,11 @@
 """Transformaciones grupo 2: bronce ERP → filas listas para dims/facts gold.
 
-Mapeo ERP → gold:
-  bronce.erp_clientes  → gold.dim_cliente (+ dim_geografia)
-  bronce.erp_productos → gold.dim_producto (+ dim_categoria)
+Mapeo ERP → gold (modelo TP: 6 dims + fact_venta_linea):
+  bronce.erp_clientes  → gold.dim_cliente  (geo embebida)
+  bronce.erp_productos → gold.dim_producto (rubro/familia embebidos)
   bronce.erp_ventas    → gold.fact_venta_linea (+ dim_fecha/canal/pago/moneda)
 
-SKs: usamos los IDs del ERP como surrogate keys (trazable; en prod SCD2 reales).
+SKs: IDs del ERP como surrogate keys (trazable; en prod SCD2 reales).
 """
 from __future__ import annotations
 
@@ -39,46 +39,8 @@ def transform_to_gold(
     ventas: list[dict[str, Any]],
 ) -> dict[str, list[dict[str, Any]]]:
     """Devuelve dict con listas listas para UPSERT/INSERT en gold.*."""
-    geografias: dict[tuple, dict] = {}
-    geo_sk = 1
-    for c in clientes:
-        key = (
-            (c.get("pais") or "Argentina"),
-            (c.get("provincia") or "N/D"),
-            (c.get("ciudad") or "N/D"),
-            (c.get("codigo_postal") or ""),
-        )
-        if key not in geografias:
-            geografias[key] = {
-                "geografia_sk": geo_sk,
-                "pais": key[0],
-                "provincia": key[1],
-                "ciudad": key[2],
-                "codigo_postal": key[3] or None,
-            }
-            geo_sk += 1
-        c["_geografia_sk"] = geografias[key]["geografia_sk"]
-
-    categorias: dict[tuple, dict] = {}
-    cat_sk = 1
-    for p in productos:
-        key = (
-            (p.get("rubro") or "N/D"),
-            (p.get("familia") or "N/D"),
-            (p.get("subfamilia") or "N/D"),
-        )
-        if key not in categorias:
-            categorias[key] = {
-                "categoria_sk": cat_sk,
-                "categoria_bk": f"CAT-{cat_sk:04d}",
-                "rubro": key[0],
-                "familia": key[1],
-                "subfamilia": key[2],
-            }
-            cat_sk += 1
-        p["_categoria_sk"] = categorias[key]["categoria_sk"]
-
     hoy = date.today()
+
     dim_cliente = []
     for c in clientes:
         bk = c.get("codigo") or str(c["id_cliente"])
@@ -91,7 +53,9 @@ def transform_to_gold(
                 "email": c.get("email"),
                 "segmento": c.get("segmento"),
                 "tipo": c.get("tipo_cliente") or "B2C",
-                "geografia_sk": c["_geografia_sk"],
+                "pais": c.get("pais") or "Argentina",
+                "provincia": c.get("provincia") or "N/D",
+                "ciudad": c.get("ciudad") or "N/D",
                 "canal_origen": "erp",
                 "fecha_alta": _d(c.get("fecha_alta")),
                 "fecha_desde": _d(c.get("fecha_alta")) or hoy,
@@ -110,7 +74,8 @@ def transform_to_gold(
                 "ean": p.get("ean"),
                 "nombre": p.get("nombre"),
                 "marca": p.get("marca"),
-                "categoria_sk": p["_categoria_sk"],
+                "rubro": p.get("rubro") or "N/D",
+                "familia": p.get("familia") or "N/D",
                 "precio_lista": p.get("precio_lista"),
                 "estado": "activo" if p.get("activo", True) else "discontinuado",
                 "fecha_desde": _d(p.get("fecha_alta")) or hoy,
@@ -120,7 +85,6 @@ def transform_to_gold(
             }
         )
 
-    # Dims de apoyo desde ventas
     canales: dict[str, dict] = {}
     pagos: dict[str, dict] = {}
     monedas: dict[str, dict] = {}
@@ -187,14 +151,6 @@ def transform_to_gold(
                 "producto_sk": int(v["id_producto"]),
                 "canal_sk": canales[canal]["canal_sk"],
                 "metodo_pago_sk": pagos[pago]["metodo_pago_sk"],
-                "geografia_sk": next(
-                    (
-                        dc["geografia_sk"]
-                        for dc in dim_cliente
-                        if dc["cliente_sk"] == int(v["id_cliente"])
-                    ),
-                    1,
-                ),
                 "moneda_sk": monedas[mon]["moneda_sk"],
                 "nro_orden": v.get("nro_orden"),
                 "linea_nro": v.get("linea_nro"),
@@ -212,14 +168,12 @@ def transform_to_gold(
         )
 
     out = {
-        "dim_geografia": list(geografias.values()),
-        "dim_categoria": list(categorias.values()),
-        "dim_cliente": dim_cliente,
-        "dim_producto": dim_producto,
         "dim_fecha": list(fechas.values()),
         "dim_canal": list(canales.values()),
         "dim_metodo_pago": list(pagos.values()),
         "dim_moneda": list(monedas.values()),
+        "dim_cliente": dim_cliente,
+        "dim_producto": dim_producto,
         "fact_venta_linea": fact,
     }
     print(

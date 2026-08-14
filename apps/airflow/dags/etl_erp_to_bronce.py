@@ -1,14 +1,12 @@
-"""DAG grupo 1 (camino B): ERP Postgres → schema bronce.
+"""DAG grupo 1: ERP Postgres → schema bronce.
 
-Ubicación OBLIGATORIA: apps/airflow/dags/  (≈ EFS access point /airflow/dags).
-Los logs de cada run van a apps/airflow/logs/ (≈ EFS /airflow/logs).
-No mover este archivo fuera del stand-in: scheduler y webserver solo ven ese mount.
-
-Lógica de negocio: paquete etl/. Este archivo solo orquesta tasks:
+Stand-in Hobby (Compose ≈ Fargate + EFS). Orquesta el paquete apps/etl/:
   1) ensure_bronce_ddl
   2) extract_erp
   3) transform_normalize
   4) load_bronce
+
+DAGs viven en apps/airflow/dags/ (≈ EFS /airflow/dags).
 """
 from __future__ import annotations
 
@@ -28,7 +26,6 @@ def task_extract(**context):
     from etl.extract.erp_foxpro import extract_erp_all
 
     data = extract_erp_all()
-    # XCom: fechas/Decimal no siempre serializan; convertimos vía normalize ya en transform.
     context["ti"].xcom_push(key="erp_raw", value=_serialize(data))
 
 
@@ -72,7 +69,6 @@ def _serialize(tables: dict) -> dict:
 
 
 def _deserialize(tables: dict) -> dict:
-    """Rehidrata fechas ISO → date donde aplica (load acepta str ISO también)."""
     return tables or {}
 
 

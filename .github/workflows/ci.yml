@@ -1,120 +1,127 @@
 # ============================================================================
-#  ¿QUÉ ES ESTE ARCHIVO? (GitHub Actions)
+#  GitHub Actions — CI del TP Integrador
 #
-#  Es un "pipeline de integración continua" (CI). GitHub lo ejecuta SOLO, en sus
-#  servidores, cada vez que subís código. Corre validaciones automáticas para
-#  avisarte si algo se rompió, ANTES de mergear. Si un check falla, se ve una
-#  cruz roja en el pull request.
-#
-#  Vocabulario:
-#    workflow = este archivo entero      job = una tarea (corre en su propia máquina)
-#    step     = un paso dentro del job    runner = la máquina virtual que lo corre
+#  Corre en push a main/master, en cada PR y con disparo manual.
+#  No levanta LocalStack ni Docker de producto: solo validaciones estáticas /
+#  smoke sin red ni DB.
 # ============================================================================
 
-name: CI   # nombre que se ve en la pestaña "Actions" de GitHub
+name: CI
 
-# 'on' = cuándo se dispara este workflow.
 on:
   push:
-    branches: [main, master]   # al subir commits a main/master
-  pull_request:                # y en cada pull request
-  workflow_dispatch:           # y con un botón manual desde la web
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
 
-# 'jobs' = las tareas. Se corren EN PARALELO por defecto (cada una en su máquina).
 jobs:
-  # -------------------------------------------------------------------------
   python-etl:
     name: Python / ETL
-    runs-on: ubuntu-latest     # el runner: una VM Linux que provee GitHub
-    steps:                     # los pasos, en orden
-      - uses: actions/checkout@v4         # 1. baja tu código al runner
-      - uses: actions/setup-python@v5     # 2. instala Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - name: Instalar herramientas
-        run: python -m pip install --upgrade pip ruff   # 'run' = comando de shell
-      - name: Instalar dependencias de los ETL
+        run: python -m pip install --upgrade pip ruff
+      - name: Instalar dependencias ETL
         run: pip install -r apps/etl/requirements.txt
-      - name: Lint (ruff, solo errores reales)
-        # ruff revisa el código. Con --select limitamos a errores de verdad
-        # (sintaxis, nombres indefinidos), no cuestiones de estilo.
-        run: ruff check --select E9,F63,F7,F82 apps/etl
+      - name: Lint (ruff, errores reales)
+        run: ruff check --select E9,F63,F7,F82 apps/etl apps/airflow/dags apps/api
       - name: Compilar (py_compile)
-        # Verifica que todos los .py compilen (no tengan errores de sintaxis).
-        # 'git ls-files' lista los archivos versionados que matchean el patrón.
         run: |
-          python -m py_compile $(git ls-files 'apps/etl/*.py')
-          python -m py_compile $(git ls-files 'apps/airflow/dags/*.py')
-      - name: Import + smoke test del paquete etl
-        # Importa el paquete y corre el flujo completo con los stubs, para
-        # verificar que las piezas encajan (no valida datos reales).
+          set -euo pipefail
+          mapfile -t etl_py < <(git ls-files 'apps/etl/**/*.py' 'apps/etl/*.py')
+          mapfile -t dag_py < <(git ls-files 'apps/airflow/dags/*.py')
+          mapfile -t api_py < <(git ls-files 'apps/api/*.py')
+          python -m py_compile "${etl_py[@]}" "${dag_py[@]}" "${api_py[@]}"
+          echo "py_compile OK (${#etl_py[@]} etl + ${#dag_py[@]} dags + ${#api_py[@]} api)"
+      - name: Import + smoke (sin DB)
+        env:
+          PYTHONPATH: apps
         run: |
-          PYTHONPATH=apps python -c "from etl.extract import EXTRACTORS; assert set(EXTRACTORS) == {'erp-foxpro','ecommerce-mongo','eventos-mongo','scraping'}, EXTRACTORS; print('etl OK')"
           python - <<'PY'
-          import sys
-          sys.path.insert(0, "apps")
           from etl.extract import EXTRACTORS
-          from etl.transform import normalize_records
+          from etl.transform import normalize_records, transform_to_gold
           from etl.load import load_to_cruda, load_to_dw
-          for o, fn in EXTRACTORS.items():
-              load_to_cruda(normalize_records(fn(), o), o)
-          load_to_dw()
-          print("smoke OK")
+
+          expected = {"erp", "erp-foxpro", "bronce"}
+          assert set(EXTRACTORS) == expected, EXTRACTORS
+
+          # APIs legacy / transform sin tocar Postgres ni Secrets
+          n = load_to_cruda(normalize_records([{"x": 1}], "demo"), "demo")
+          assert n == 1
+          assert load_to_dw() == 0
+          bundle = transform_to_gold([], [], [])
+          assert set(bundle) >= {
+              "dim_fecha",
+              "dim_cliente",
+              "dim_producto",
+              "dim_canal",
+              "dim_metodo_pago",
+              "dim_moneda",
+              "fact_venta_linea",
+          }
+          print("etl smoke OK")
           PY
 
-  # -------------------------------------------------------------------------
   shell:
     name: Shell scripts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: bash -n (sintaxis)
-        # 'bash -n' lee el script y revisa su sintaxis SIN ejecutarlo.
         run: |
-          for f in $(git ls-files '*.sh'); do bash -n "$f" && echo "OK $f"; done
-      - name: ShellCheck (solo errores)
-        # ShellCheck es un "linter" de bash: detecta bugs comunes. --severity=error
-        # hace que solo falle ante errores graves, no advertencias de estilo.
+          set -euo pipefail
+          mapfile -t files < <(git ls-files '*.sh')
+          if ((${#files[@]} == 0)); then
+            echo "No hay scripts .sh versionados"
+            exit 0
+          fi
+          for f in "${files[@]}"; do
+            bash -n "$f" && echo "OK $f"
+          done
+      - name: ShellCheck (producto)
+        # Solo entrypoint de la imagen IaC; labs/*.sh son demos CLI (awslocal).
         run: |
-          sudo apt-get update && sudo apt-get install -y shellcheck
-          shellcheck --severity=error $(git ls-files '*.sh')
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          mapfile -t files < <(git ls-files 'docker/*.sh' 'ops/scripts/*.sh')
+          if ((${#files[@]} == 0)); then
+            echo "No hay scripts de producto para ShellCheck"
+            exit 0
+          fi
+          shellcheck --severity=error "${files[@]}"
+          echo "shellcheck OK"
 
-  # -------------------------------------------------------------------------
-  terraform:
-    name: Terraform (IaC)
+  opentofu:
+    name: OpenTofu (IaC)
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: infra   # todos los 'run' de este job corren acá
+        working-directory: infra
     steps:
       - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3  # instala Terraform en el runner
+      - uses: opentofu/setup-opentofu@v1
         with:
-          terraform_version: "1.9.5"
+          tofu_version: "1.8.8"
       - name: Format check
-        # Chequea que el código esté bien formateado. 'continue-on-error' hace
-        # que AVISE pero no rompa el build si el formato no es perfecto.
-        run: terraform fmt -check -recursive -diff
+        run: tofu fmt -check -recursive -diff
         continue-on-error: true
       - name: Init (sin backend)
-        # 'init' descarga los providers. -backend=false: no configura estado
-        # remoto (no hace falta para solo validar).
-        run: terraform init -backend=false
+        run: tofu init -backend=false
       - name: Validate
-        # 'validate' revisa que la configuración sea correcta (tipos, referencias).
-        run: terraform validate
+        run: tofu validate
 
-  # -------------------------------------------------------------------------
   compose:
     name: Docker Compose
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Validar compose.yaml
-        # 'config -q' parsea el compose y falla si hay errores. No levanta nada.
         run: docker compose -f compose.yaml config -q && echo "compose OK"
 
-  # -------------------------------------------------------------------------
   finops:
     name: FinOps (costos)
     runs-on: ubuntu-latest
@@ -123,8 +130,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Validar services.json y correr el estimador
-        # Verifica que el JSON de costos sea válido y corre la calculadora.
+      - name: Validar services.json y estimador
+        working-directory: labs/finops
+        env:
+          PYTHONIOENCODING: utf-8
         run: |
-          python -c "import json; json.load(open('labs/finops/services.json')); print('services.json OK')"
-          python labs/finops/pricing.py --services services.json --budget 300
+          python -c "import json; json.load(open('services.json', encoding='utf-8')); print('services.json OK')"
+          python pricing.py --services services.json --budget 300

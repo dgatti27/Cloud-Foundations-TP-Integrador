@@ -1,9 +1,9 @@
 """
-Lab 09b TP — demo automatizada: cómputo ETL (Airflow) → schema bronce.
+Runtime Hobby: cómputo ETL (Airflow ≈ Fargate + EFS) → RDS bronce/gold.
 
-Qué hace este script
---------------------
-Orquesta en LocalStack Hobby el equivalente local de:
+Qué hace
+--------
+Orquesta el equivalente local de:
 
   AWS to-be                          Hobby (este script)
   --------------------------------   -----------------------------------------
@@ -11,40 +11,28 @@ Orquesta en LocalStack Hobby el equivalente local de:
   EFS (DAGs + logs)                  apps/airflow/ montado en Compose
   ecsTaskExecutionRole               IAM en LocalStack (:4566) — modelo
   app-role + secrets ETL             IAM + Secrets MiniStack (:4567)
-  RDS schema bronce                  MiniStack tp-dw-db (:15432 en host)
+  RDS schemas bronce/gold            MiniStack tp-dw-db
 
-Por qué existe
---------------
-LocalStack Hobby NO incluye APIs `ecs` ni `efs` (licencia Pro). El lab no
-puede hacer create-cluster / create-file-system. En cambio:
-
-  1) Deja en IAM el modelo de privilegios del to-be (docs/Solution §4–5).
-  2) Levanta Airflow en Docker con el mismo DAG que correría en Fargate.
-  3) Demuestra el flujo grupo 1: origen → INSERT bronce.* vía dw/rds-etl.
-
-Cierra el arco: IAM (04) → VPC (07-v2) → RDS (08-tp) → cómputo ETL (09b).
+LocalStack Hobby no incluye APIs ecs/efs. Este script:
+  1) Deja en IAM el modelo de privilegios del to-be
+  2) Levanta Airflow y triggerea DAGs en apps/airflow/dags/
+  3) Camino A: etl_rds_comprobation · Camino B (--erp): ERP→bronce→gold
 
 Endpoints (no mezclar)
 ----------------------
-  LocalStack :4566  → IAM + EC2/VPC (roles, sg-efs)
-  MiniStack  :4567  → Secrets Manager (dw/origen-demo, dw/rds-etl)
-  MinIO      :9000  → staging S3 (opcional; no obligatorio aquí)
+  LocalStack :4566  → IAM + VPC
+  MiniStack  :4567  → Secrets + RDS API
+  MinIO      :9000  → data lake
   Airflow UI :8080  → admin / admin
-  RDS host   :15432 → destino bronce (override desde contenedores)
 
 Uso
 ---
-    # Prereqs: labs 04, 07-v2, 08-tp ya corridos; compose base up.
-    python labs/ecs/ecs_demo.py              # camino A (demo conectividad)
-    python labs/ecs/ecs_demo.py --erp        # camino A + B (ERP→bronce→gold vía EFS)
-    python labs/ecs/ecs_demo.py --skip-infra # tras tofu apply en infra/
-    python labs/ecs/ecs_demo.py --skip-runtime
-    python labs/ecs/ecs_demo.py --cleanup
+    python labs/ecs/ecs.py --skip-infra           # camino A (tras tofu apply)
+    python labs/ecs/ecs.py --skip-infra --erp     # camino B
+    python labs/ecs/ecs.py --cleanup
 
-Infra alternativa (OpenTofu): infra/ — IAM execution/task, stand-in marker,
-secret origen. Runtime (Compose/DAG) siempre es este script o el CLI manual.
+IaC: infra/ · DAGs: apps/airflow/dags/ · origen ERP: apps/etl/etl_demo.py
 """
-
 from __future__ import annotations
 
 import argparse
@@ -60,7 +48,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 # ── Constantes / rutas ────────────────────────────────────────────────────────
-# ROOT = repo; ECS_DIR = carpeta de este lab (policies JSON).
+# ROOT = repo; ECS_DIR = policies JSON de este directorio.
 ROOT = Path(__file__).resolve().parents[2]
 ECS_DIR = Path(__file__).resolve().parent
 
@@ -76,7 +64,7 @@ _CREDS = dict(
     aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "test"),
 )
 
-DAG_ID = "etl_bronce_origen_demo"
+DAG_ID = "etl_rds_comprobation"
 ORIGEN_SECRET = "dw/origen-demo"
 RDS_ETL_SECRET = "dw/rds-etl"
 
@@ -144,19 +132,19 @@ def check_prereqs() -> None:
     Por qué: si falta app-role / VPC / dw/rds-etl, el resto del lab “pasa”
     a medias y confunde (Compose up OK pero el DAG no puede escribir bronce).
     """
-    print("0. Prerequisitos (labs 04 / 07-v2 / 08-tp)")
+    print("0. Prerequisitos (infra ya aplicada)")
     iam = client_ls("iam")
     ec2 = client_ls("ec2")
     sm = client_ms("secretsmanager")
 
-    # Lab 04 — task role base (trust ECS + InlineS3Read). Aquí solo exigimos
+    # Task role base (trust ECS + InlineS3Read). Aquí solo exigimos
     # que exista; el Paso 1 le agrega InlineEtlSecrets.
     try:
         arn = iam.get_role(RoleName="app-role")["Role"]["Arn"]
         print(f"  ✓ app-role: {arn}")
     except ClientError as e:
         raise SystemExit(
-            "Falta app-role (lab 04). Corré: cd infra; tofu apply\n"
+            "Falta app-role Corré: cd infra; tofu apply\n"
             f"  detalle: {e}"
         ) from e
 
@@ -180,7 +168,7 @@ def check_prereqs() -> None:
             Filters=[{"Name": "group-name", "Values": ["sg-efs", "tp-efs"]}]
         )["SecurityGroups"]
     if not sgs:
-        raise SystemExit("Falta sg-efs (lab 07-v2 / OpenTofu lab-09-tp).")
+        raise SystemExit("Falta sg-efs (OpenTofu infra/).")
     print(f"  ✓ sg-efs: {sgs[0]['GroupId']}")
 
     # Lab 08-tp — secret ETL (etl_writer) y instancia RDS real detrás de MiniStack.
@@ -189,7 +177,7 @@ def check_prereqs() -> None:
         print(f"  ✓ secret {RDS_ETL_SECRET} (MiniStack)")
     except ClientError as e:
         raise SystemExit(
-            f"Falta secret {RDS_ETL_SECRET} (lab 08-tp). "
+            f"Falta secret {RDS_ETL_SECRET} "
             "Corré: cd infra; tofu apply\n"
             f"  detalle: {e}"
         ) from e
@@ -200,7 +188,7 @@ def check_prereqs() -> None:
     ).stdout.strip()
     if not rds_containers:
         raise SystemExit(
-            "No hay contenedor ministack-rds-*. ¿MiniStack + create-db-instance del lab 08?"
+            "No hay contenedor ministack-rds-*. ¿MiniStack + create-db-instance de RDS / MiniStack?"
         )
     print(f"  ✓ RDS container: {rds_containers.splitlines()[0]}")
 
@@ -223,7 +211,7 @@ def step_iam() -> None:
 
     Por qué en Hobby igual los creamos:
       LocalStack no inyecta estos roles en Docker Compose (usamos keys test).
-      Quedan como modelo IAM alineado a docs/ y reusable en Learner Lab / AWS.
+      Quedan como modelo IAM alineado a docs/ y reusable en cuenta AWS real.
     """
     print("\n1. IAM — execution role + task role (modelo Fargate)")
     iam = client_ls("iam")
@@ -237,7 +225,7 @@ def step_iam() -> None:
         iam.create_role(
             RoleName="ecsTaskExecutionRole",
             AssumeRolePolicyDocument=trust,
-            Description="Lab 09b — agente ECS (boot): ECR + awslogs",
+            Description="ECS execution — ECR + awslogs",
         )
         print("  ✓ ecsTaskExecutionRole creado")
     except ClientError as e:
@@ -254,7 +242,7 @@ def step_iam() -> None:
     exec_arn = iam.get_role(RoleName="ecsTaskExecutionRole")["Role"]["Arn"]
     print(f"  ✓ InlineEcsExecution → {exec_arn}")
 
-    # 1.2 Task role = ampliar app-role (lab 04) con lectura de secrets ETL/orígenes.
+    # 1.2 Task role = ampliar app-role con lectura de secrets ETL/orígenes.
     # No tocamos master/api: privilegio mínimo (Solution §4.1).
     iam.put_role_policy(
         RoleName="app-role",
@@ -263,7 +251,7 @@ def step_iam() -> None:
     )
     policies = iam.list_role_policies(RoleName="app-role")["PolicyNames"]
     print(f"  ✓ app-role policies: {', '.join(sorted(policies))}")
-    # Esperado típico: InlineS3Read (lab 04) + InlineEtlSecrets (este lab)
+    # Esperado típico: InlineS3Read + InlineEtlSecrets
 
 
 # ── Paso 2 — EFS stand-in ─────────────────────────────────────────────────────
@@ -292,7 +280,7 @@ def step_efs_standin() -> None:
 
     EFS_DAGS.mkdir(parents=True, exist_ok=True)
     EFS_LOGS.mkdir(parents=True, exist_ok=True)
-    dag_file = EFS_DAGS / "etl_bronce_origen_demo.py"
+    dag_file = EFS_DAGS / "etl_rds_comprobation.py"
     if not dag_file.is_file():
         raise SystemExit(f"Falta DAG demo en {dag_file}")
     print(f"  ✓ dags: {dag_file.relative_to(ROOT)}")
@@ -327,7 +315,7 @@ def step_origen_secret() -> None:
     try:
         sm.create_secret(
             Name=ORIGEN_SECRET,
-            Description="Lab 09b — origen demo (postgres-bronce)",
+            Description="Origen demo (postgres-bronce)",
             SecretString=body,
         )
         print(f"  ✓ {ORIGEN_SECRET} creado")
@@ -400,9 +388,9 @@ def _airflow(container: str, *args: str, check: bool = True) -> str:
 
 def wait_for_dag(container: str, timeout_s: int = 180) -> None:
     """
-    Espera a que el DagFileProcessor registre etl_bronce_origen_demo.
+    Espera a que el DagFileProcessor registre etl_rds_comprobation.
 
-    Por qué: el scheduler tarda unos segundos en parsear efs-standin/dags.
+    Por qué: el scheduler tarda unos segundos en parsear apps/airflow/dags.
     Trigger prematuro → 'Dag … not found'.
     """
     print(f"\n3.3b Esperando parse del DAG `{DAG_ID}`…")
@@ -460,7 +448,7 @@ def step_trigger_dag(container: str, timeout_s: int = 180) -> str:
             print(states)
             raise SystemExit(
                 "DAG falló. Tip: secret origen debe ser JSON con comillas dobles; "
-                "revisá efs-standin/logs/.../attempt=1.log"
+                "revisá apps/airflow/logs/.../attempt=1.log"
             )
         time.sleep(4)
 
@@ -485,7 +473,7 @@ def step_verify_bronce() -> None:
 
     Por qué dwadmin y no etl_writer aquí:
       Verificación de lab (lectura amplia). El DAG escribió como etl_writer
-      (credencial de dw/rds-etl). api_reader NO debería ver bronce (lab 08).
+      (credencial de dw/rds-etl). api_reader NO debería ver bronce (seed RDS).
     """
     print("\n3.4 Verificar filas en schema bronce")
     c = _rds_container()
@@ -517,11 +505,11 @@ def step_e2e_narrative(run_id: str | None) -> None:
     print("\n4. Flujo end-to-end (checklist)")
     print(
         """
-  1. Scheduler lee DAG desde efs-standin/dags          (≈ EFS)
+  1. Scheduler lee DAG desde apps/airflow/dags          (≈ EFS)
   2. Task usa secrets MiniStack (modelo: app-role)
   3. Connect SOURCE (postgres-bronce vía dw/origen-demo)
   4. INSERT bronce.ingest_batch + bronce.raw_record    (etl_writer)
-  5. Logs en efs-standin/logs                          (≈ EFS logs)
+  5. Logs en apps/airflow/logs                          (≈ EFS logs)
 """.rstrip()
     )
     if run_id:
@@ -540,9 +528,9 @@ def step_cleanup() -> None:
 
 def step_erp_camino_b(container: str) -> None:
     """
-    Camino B (lab-extra + EFS): DDL bronce.erp_* + DAGs etl_erp_to_bronce / etl_bronce_to_gold.
+    Camino B (ERP + EFS): DDL bronce.erp_* + DAGs etl_erp_to_bronce / etl_bronce_to_gold.
 
-    Los .py DEBEN estar en efs-standin/dags (contrato EFS del lab 09b).
+    Los .py DEBEN estar en apps/airflow/dags (contrato EFS stand-in).
     """
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
@@ -556,7 +544,7 @@ def step_erp_camino_b(container: str) -> None:
             raise SystemExit(f"Falta DAG en EFS stand-in: {dag_file}")
         print(f"  ✓ EFS dags: {dag_file.name}")
 
-    # Secret ERP (lab-extra) debe existir
+    # Secret ERP (etl_demo) debe existir
     sm = client_ms("secretsmanager")
     try:
         sm.describe_secret(SecretId="dw/erp")
@@ -624,14 +612,14 @@ def wait_for_dag_id(container: str, dag_id: str, timeout_s: int = 180) -> None:
         if dag_id in listing:
             return
         time.sleep(5)
-    raise SystemExit(f"Timeout: DAG {dag_id} no visible (¿está en efs-standin/dags?)")
+    raise SystemExit(f"Timeout: DAG {dag_id} no visible (¿está en apps/airflow/dags?)")
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Lab 09b — Airflow ETL → bronce (stand-in Fargate + EFS)"
+        description="Airflow ETL stand-in (Fargate + EFS)"
     )
     parser.add_argument(
         "--skip-infra",
@@ -659,7 +647,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    print("=== Lab 09b — ECS/Airflow stand-in → bronce ===\n")
+    print("=== ECS/Airflow stand-in ===\n")
     print(f"  LocalStack (IAM/VPC): {ENDPOINT_LOCALSTACK}")
     print(f"  MiniStack  (Secrets): {ENDPOINT_MINISTACK}")
     print(f"  Compose:              {COMPOSE_FILE.relative_to(ROOT)}")
@@ -679,7 +667,7 @@ def main() -> int:
     else:
         print("\n1–3. Infra omitida (esperada vía tofu apply en infra/)")
         # Sanity: DAGs deben existir en el stand-in
-        dag_file = EFS_DAGS / "etl_bronce_origen_demo.py"
+        dag_file = EFS_DAGS / "etl_rds_comprobation.py"
         if not dag_file.is_file():
             raise SystemExit(f"Falta DAG demo en {dag_file}")
         print(f"  · stand-in OK: {dag_file.relative_to(ROOT)}")
@@ -704,8 +692,8 @@ def main() -> int:
     if args.cleanup:
         step_cleanup()
 
-    print("\n=== Lab 09b OK ===")
-    print("  Hobby = Compose + efs-standin; AWS real = Fargate + EFS (docs/).")
+    print("\n=== ECS/Airflow OK ===")
+    print("  Hobby = Compose + apps/airflow; AWS real = Fargate + EFS (docs/).")
     if args.erp:
         print("  Camino B ERP→bronce→gold ejecutado vía DAGs en EFS.")
     return 0

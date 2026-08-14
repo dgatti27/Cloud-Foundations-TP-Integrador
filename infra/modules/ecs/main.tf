@@ -9,7 +9,7 @@
 #   → cluster + EFS + mount targets en subnets compute.
 #
 # IAM execution/task roles los crea modules/iam. Secret origen = modules/secrets.
-# Compose / trigger DAG = ecs_demo.py --skip-infra (no IaC).
+# Compose / trigger DAG = ecs.py --skip-infra (no IaC).
 # =============================================================================
 
 variable "enable_ecs_api" { type = bool }

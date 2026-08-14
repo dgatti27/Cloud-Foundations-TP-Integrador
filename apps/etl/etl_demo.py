@@ -3,17 +3,13 @@ Demo: origen ERP + paquete etl/.
 
 Qué hace
 --------
-1) Verifica / levanta postgres-erp y cuenta filas Clientes/Productos/Ventas
-2) Publica secret dw/erp en MiniStack (JSON válido; evita bug PowerShell)
-3) (Opcional) Corre pipelines sin Airflow: ERP→bronce y bronce→gold
-4) Remite a Airflow para orquestación (python labs/ecs/ecs_demo.py --erp)
-
-La orquestación Airflow / DDL vía DAG / EFS NO se hace acá → ecs_demo.py --erp
+1) Levanta postgres-erp y cuenta filas Clientes/Productos/Ventas
+2) Publica secret dw/erp en MiniStack
+3) Remite a Airflow (python labs/ecs/ecs.py --skip-infra --erp)
 
 Uso
 ---
     python apps/etl/etl_demo.py
-    python apps/etl/etl_demo.py --with-pipelines   # escribe bronce/gold sin Airflow
     python apps/etl/etl_demo.py --skip-secret
 """
 
@@ -29,7 +25,6 @@ from pathlib import Path
 import boto3
 from botocore.exceptions import ClientError
 
-ROOT = Path(__file__).resolve().parent.parent
 ETL_DIR = Path(__file__).resolve().parent
 REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 ENDPOINT_MS = os.environ.get("MINISTACK_ENDPOINT", "http://localhost:4567")
@@ -88,7 +83,6 @@ def step_erp_up() -> None:
         check=False,
     )
     if r.returncode != 0:
-        # seed faltante → aplicar
         seed = (ETL_DIR / "erp" / "seed_erp.sql").read_text(encoding="utf-8")
         print("  · aplicando seed_erp.sql…")
         _run(
@@ -121,31 +115,9 @@ def step_secret() -> None:
     print(f"  · Name={name} (host=postgres-erp para Airflow en red Docker)")
 
 
-def step_pipelines() -> None:
-    print("3. Pipelines sin Airflow (opcional — escribe RDS)")
-    os.environ.setdefault("SECRETS_ENDPOINT", ENDPOINT_MS)
-    os.environ.setdefault("RDS_HOST_OVERRIDE", "localhost")
-    os.environ.setdefault("RDS_PORT_OVERRIDE", "15432")
-    os.environ["ORIGEN_ERP_CONN"] = "postgresql://postgres:postgres@localhost:5434/erp"
-    # import desde repo root
-    if str(ROOT) not in sys.path:
-        sys.path.insert(0, str(ROOT))
-    from etl.pipelines import run_bronce_to_gold, run_erp_to_bronce
-
-    n1 = run_erp_to_bronce()
-    n2 = run_bronce_to_gold()
-    print(f"  ✓ g1 filas={n1}  g2 upserts={n2}")
-    print("  · Para el camino oficial con EFS/Airflow: python labs/ecs/ecs_demo.py --erp")
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="ERP + paquete etl/")
     parser.add_argument("--skip-secret", action="store_true")
-    parser.add_argument(
-        "--with-pipelines",
-        action="store_true",
-        help="Ejecuta run_erp_to_bronce + run_bronce_to_gold en el host (sin Airflow)",
-    )
     args = parser.parse_args()
 
     print("=== origen ERP + paquete etl/ ===\n")
@@ -154,15 +126,11 @@ def main() -> int:
     step_erp_up()
     if not args.skip_secret:
         step_secret()
-    if args.with_pipelines:
-        step_pipelines()
-    else:
-        print("\n3. Pipelines omitidos (sin --with-pipelines)")
-        print("   Siguiente (orquestación EFS/Airflow):")
-        print("     python labs/ecs/ecs_demo.py --erp")
+
+    print("\n3. Siguiente (orquestación Airflow):")
+    print("     python labs/ecs/ecs.py --skip-infra --erp")
 
     print("\n=== ETL demo OK ===")
-    print("  Origen + secret listos. Cómputo DAGs → python labs/ecs/ecs_demo.py --erp")
     return 0
 
 

@@ -1,4 +1,4 @@
-"""Grupo 2 — carga dimensional en schema gold (Modelo_DW)."""
+"""Grupo 2 — carga dimensional en schema gold (modelo TP)."""
 from __future__ import annotations
 
 from typing import Any
@@ -6,14 +6,8 @@ from typing import Any
 from etl.config import rds_etl_conn
 from etl.db import connect
 
-# (tabla, pk, columnas)
+# (tabla, pk, columnas) — orden: dims de apoyo → maestros → fact
 _SPECS: list[tuple[str, str, list[str]]] = [
-    ("gold.dim_geografia", "geografia_sk", [
-        "geografia_sk", "pais", "provincia", "ciudad", "codigo_postal",
-    ]),
-    ("gold.dim_categoria", "categoria_sk", [
-        "categoria_sk", "categoria_bk", "rubro", "familia", "subfamilia",
-    ]),
     ("gold.dim_fecha", "fecha_sk", [
         "fecha_sk", "fecha", "anio", "trimestre", "mes", "nombre_mes",
         "dia", "dia_semana", "semana_anio", "es_finde", "es_feriado",
@@ -29,20 +23,20 @@ _SPECS: list[tuple[str, str, list[str]]] = [
     ]),
     ("gold.dim_cliente", "cliente_sk", [
         "cliente_sk", "cliente_bk", "id_unificado", "nombre", "email",
-        "segmento", "tipo", "geografia_sk", "canal_origen", "fecha_alta",
-        "fecha_desde", "fecha_hasta", "es_vigente", "hash_diff",
+        "segmento", "tipo", "pais", "provincia", "ciudad", "canal_origen",
+        "fecha_alta", "fecha_desde", "fecha_hasta", "es_vigente", "hash_diff",
     ]),
     ("gold.dim_producto", "producto_sk", [
         "producto_sk", "producto_bk", "ean", "nombre", "marca",
-        "categoria_sk", "precio_lista", "estado", "fecha_desde",
+        "rubro", "familia", "precio_lista", "estado", "fecha_desde",
         "fecha_hasta", "es_vigente", "hash_diff",
     ]),
     ("gold.fact_venta_linea", "venta_sk", [
         "venta_sk", "fecha_sk", "cliente_sk", "producto_sk", "canal_sk",
-        "metodo_pago_sk", "geografia_sk", "moneda_sk", "nro_orden",
-        "linea_nro", "cantidad", "precio_unitario", "descuento",
-        "importe_bruto", "importe_neto", "impuesto", "costo",
-        "margen_bruto", "batch_id", "fecha_carga",
+        "metodo_pago_sk", "moneda_sk", "nro_orden", "linea_nro",
+        "cantidad", "precio_unitario", "descuento", "importe_bruto",
+        "importe_neto", "impuesto", "costo", "margen_bruto",
+        "batch_id", "fecha_carga",
     ]),
 ]
 
@@ -75,8 +69,6 @@ def load_gold_bundle(bundle: dict[str, list[dict[str, Any]]]) -> int:
     total = 0
     try:
         key_map = {
-            "gold.dim_geografia": "dim_geografia",
-            "gold.dim_categoria": "dim_categoria",
             "gold.dim_fecha": "dim_fecha",
             "gold.dim_canal": "dim_canal",
             "gold.dim_metodo_pago": "dim_metodo_pago",

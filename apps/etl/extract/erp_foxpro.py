@@ -1,8 +1,7 @@
 """Extractor ERP → filas crudas.
 
-Históricamente el origen era FoxPro/DBF. En el TP local el origen es el
-Postgres `postgres-erp` (tablas Clientes / Productos / Ventas). La firma
-`extract_erp` se mantiene para no romper imports; el host sale de `dw/erp`.
+En el TP el origen es Postgres `postgres-erp` (Clientes / Productos / Ventas).
+El nombre del módulo es histórico; la conexión sale de `dw/erp`.
 """
 from __future__ import annotations
 

@@ -1,13 +1,11 @@
-"""DAG grupo 2 (camino B): bronce.erp_* → gold (dims + fact_venta_linea).
+"""DAG grupo 2: bronce.erp_* → gold (6 dims + fact_venta_linea).
 
-Ubicación OBLIGATORIA: apps/airflow/dags/  (≈ EFS access point /airflow/dags).
-Logs → apps/airflow/logs/ (≈ EFS /airflow/logs). Mismo contrato que el resto
-del stand-in EFS: sin mount compartido, scheduler y workers no verían el mismo DAG.
-
-Lógica: paquete etl/. Orquestación:
+Stand-in Hobby. Orquesta apps/etl/:
   1) extract_bronce
   2) transform_to_gold
   3) load_gold
+
+DAGs en apps/airflow/dags/ · logs en apps/airflow/logs/ (≈ EFS).
 """
 from __future__ import annotations
 

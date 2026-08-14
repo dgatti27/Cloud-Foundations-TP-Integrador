@@ -1,15 +1,15 @@
-# Labs del curso
+# Labs (guías y demos)
 
-Guías y demos Python. **La infraestructura se genera solo desde [`../infra`](../infra)** (`tofu apply`).
+Material de apoyo del curso. **La infraestructura del producto se genera solo desde [`../infra`](../infra)** (`tofu apply`).
 
-| Lab | Carpeta | IaC vigente |
-|-----|---------|-------------|
-| 04 IAM | [`iam/`](iam/) | `infra/modules/iam` |
-| 06 S3 | [`s3/`](s3/) | `infra/modules/s3` |
-| 07 VPC | [`vpc/`](vpc/) | `infra/modules/vpc` |
-| 08 RDS | [`rds/`](rds/) | `infra/modules/rds` + `secrets` |
-| 09b ECS | [`ecs/`](ecs/) | `infra/modules/ecs` |
-| API Lambda | [`lambda/`](lambda/) | `infra/modules/lambda` |
-| 10 FinOps | [`finops/`](finops/) | `infra/modules/finops` |
+| Tema | Carpeta | IaC en el TP |
+|------|---------|--------------|
+| IAM | [`iam/`](iam/) | `infra/modules/iam` |
+| S3 / lake | [`s3/`](s3/) | `infra/modules/s3` |
+| VPC | [`vpc/`](vpc/) | `infra/modules/vpc` |
+| RDS | [`rds/`](rds/) | `infra/modules/rds` + `secrets` |
+| ECS / Airflow | [`ecs/`](ecs/) → [`ecs.py`](ecs/ecs.py) | `infra/modules/ecs` |
+| Lambda API | [`lambda/`](lambda/) | `infra/modules/lambda` |
+| FinOps | [`finops/`](finops/) → [`pricing.py`](finops/pricing.py) | `infra/modules/finops` |
 
-Runtime: [`../apps`](../apps) · seeds: [`../data/rds`](../data/rds)
+Runtime de producto: [`../apps`](../apps) · seed RDS: [`../data/rds/seed_tp.sql`](../data/rds/seed_tp.sql) · bring-up: [`../README.md`](../README.md).

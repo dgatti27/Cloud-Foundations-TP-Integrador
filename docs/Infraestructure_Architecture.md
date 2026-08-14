@@ -33,12 +33,12 @@ Arquitectura de 3 capas dentro de una **VPC 10.0.0.0/16** en **us-east-1**:
 - **Transversal**: IAM (roles minimos), S3 (staging/backups/data lake),
   Secrets Manager (credenciales de los 4 origenes + RDS), CloudWatch (logs/metricas).
 
-## Mapeo local → cloud (continuidad con el repo del curso)
+## Mapeo local → cloud
 
 | Local (Hobby) | Cloud (to-be) |
 |---|---|
-| MiniStack RDS (Postgres real, cruda + DW) | RDS PostgreSQL Multi-AZ (2 bases) |
-| Airflow (Docker) | ECS Fargate + EFS (sin EC2) |
-| MinIO | S3 |
-| MiniStack (IAM/RDS/S3/Secrets/ELB) | Servicios AWS reales |
-| Script AWS CLI | Provisioning reproducible (`iac/aws-cli`) |
+| MiniStack RDS `dw` (schemas **bronce** + **gold**) | RDS PostgreSQL Multi-AZ (una instancia, dos schemas) |
+| Airflow Compose + `apps/airflow/` ≈ EFS | ECS Fargate + EFS (sin EC2) |
+| MinIO | S3 data lake |
+| LocalStack (IAM / VPC / Lambda / Logs) | Servicios AWS reales |
+| OpenTofu [`infra/`](../infra/) | Misma declaración (endpoints → AWS real) |

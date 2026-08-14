@@ -1,48 +1,40 @@
-# ECS / Airflow ETL (lab 09b)
+# Cómputo ETL (stand-in Fargate + EFS)
 
-Lab: [`lab-09b-tp.md`](./lab-09b-tp.md) — **ecosistema de cómputo** (stand-in Fargate + EFS).  
-Script demo: [`ecs_demo.py`](./ecs_demo.py) — camino A (conectividad, pasos 0–4).
+Hobby no tiene APIs `ecs`/`efs`. Este directorio tiene el **script de runtime** que:
 
-Origen ERP + código `extract/transform/load`: [`../../apps/etl/lab-extra-tp.md`](../../apps/etl/lab-extra-tp.md).  
-En **este** lab se aplican DDL Bronce y se triggerean los DAGs → bronce/gold.
+1. (Opcional) modela IAM execution/task en LocalStack  
+2. Levanta Airflow vía Compose raíz  
+3. Triggerea DAGs en `apps/airflow/dags/` (≈ EFS)
 
-## Alcance Hobby
-
-| Incluido | Fuera (Pro / AWS real) |
-|---|---|
-| IAM roles execution + task | `ecs create-cluster` / task definitions |
-| `efs-standin/` ≈ EFS | `efs create-file-system` |
-| Compose Airflow + DAGs grupo 1/2 | Fargate + mount NFS |
-| DDL `bronce.erp_*` + carga gold | — |
+IaC del modelo: [`../../infra/modules/ecs`](../../infra/modules/ecs).  
+Flujo de datos: [README raíz](../../README.md#datos-esquemas-y-procesamiento).
 
 ## Quick start
 
 ```powershell
-# Prereqs: labs 04, 07-v2, 08-tp (+ lab-extra si camino ERP)
+# Tras: docker compose up -d  +  cd infra; tofu apply
 $env:AWS_ACCESS_KEY_ID = "test"
 $env:AWS_SECRET_ACCESS_KEY = "test"
 $env:AWS_DEFAULT_REGION = "us-east-1"
-$env:PYTHONIOENCODING = "utf-8"
 
-# Opción A — Python full
-python labs/ecs/ecs_demo.py           # camino A
-python labs/ecs/ecs_demo.py --erp     # camino A + B (ERP en EFS)
-
-# Opción B — OpenTofu + runtime
-cd infra; tofu apply; cd ..
-python labs/ecs/ecs_demo.py --skip-infra
+python apps/etl/etl_demo.py                              # origen ERP + dw/erp
+python labs/ecs/ecs.py --skip-infra --erp                # DAGs ERP→bronce→gold
 # UI http://localhost:8080  admin/admin
 ```
 
-API gold (siguiente): `docker compose up -d` → ALB stand-in `:8088`
+| Flag | Efecto |
+|------|--------|
+| (sin flags) | IAM modelo + Compose + camino A (`etl_rds_comprobation`) |
+| `--skip-infra` | Solo runtime (recomendado si ya corriste `tofu apply`) |
+| `--erp` | Además `etl_erp_to_bronce` + `etl_bronce_to_gold` |
+| `--skip-runtime` | Solo IAM / checks |
+| `--cleanup` | Stop Airflow |
 
 ## Archivos
 
 | Archivo | Rol |
 |---|---|
-| `lab-09b-tp.md` | Guía comentada (qué / por qué) |
-| `ecs_demo.py` | Demo camino A (+ `--skip-infra` tras IaC) |
-| IaC | [`../../infra/modules/ecs`](../../infra/modules/ecs) |
-| `../../compose.yaml` (`airflow-*`) | ≈ Fargate (stack único raíz) |
-| `../../apps/airflow/dags/` | DAGs (demo + ERP + gold) |
-| `IAM-NOTES.md` / policies | Modelo IAM |
+| [`ecs.py`](./ecs.py) | Orquestación demo / trigger DAGs |
+| [`efs_config.json`](./efs_config.json) | Inventario stand-in (paths → `apps/airflow`) |
+| [`IAM-NOTES.md`](./IAM-NOTES.md) | Notas de policies |
+| Policies `*.json` | Modelo IAM (también en `infra/modules/iam`) |

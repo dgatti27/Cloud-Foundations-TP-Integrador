@@ -5,9 +5,9 @@ reproducible con **LocalStack Hobby + MiniStack + MinIO + OpenTofu**.
 
 ## Qué se migra
 
-- **Bronce + DW** (PostgreSQL) → **RDS PostgreSQL Multi-AZ** (una instancia, dos schemas).
-- **ETLs** (Airflow / DAGs Python) desde ERP, ecommerce, eventos y scraping → **ECS Fargate + EFS** (sin EC2). En Hobby: Compose Airflow + `apps/airflow/` ≈ EFS.
-- **API** para que Qlik consuma gold → **Lambda detrás de ALB**. En Hobby: Lambda en LocalStack + ALB stand-in `:8088`.
+- **Bronce + gold** (PostgreSQL) → **RDS PostgreSQL Multi-AZ** (una instancia, dos schemas). Gold del TP: **6 dims + 2 facts**.
+- **ETLs** (Airflow / DAGs Python) desde origen ERP (Postgres) → **ECS Fargate + EFS** (sin EC2). En Hobby: Compose Airflow + `apps/airflow/` ≈ EFS.
+- **API** de solo lectura sobre gold → **Lambda detrás de ALB**. En Hobby: Lambda LocalStack + ALB stand-in `:8088`.
 
 Red: **VPC**, subnets privadas, **IAM**, security groups. Cómputo ETL serverless (**Fargate + EFS**).
 
@@ -23,13 +23,89 @@ Arquitectura: [`docs/`](docs/) · FinOps: [`docs/finops.md`](docs/finops.md) · 
 ├── infra/                     # única fuente IaC (tofu apply)
 │   └── modules/               # iam, vpc, s3, rds, secrets, lambda, ecs, cloudwatch, finops
 ├── apps/
-│   ├── etl/                   # paquete Python de pipelines
+│   ├── etl/                   # paquete Python ETL (extract/transform/load)
 │   ├── api/                   # Lambda handler + ALB stand-in
 │   └── airflow/               # DAGs + logs (≈ EFS)
 ├── data/rds/                  # seed_tp.sql
 ├── ops/                       # pgAdmin + scripts
 └── test/                      # evidencia / logs de smoke + IaC
 ```
+
+## Datos: esquemas y procesamiento
+
+### Flujo (camino ERP)
+
+```text
+postgres-erp          Airflow (≈ Fargate + EFS)              RDS MiniStack (db dw)
+(Compose :5434)       apps/airflow/dags/                     schemas bronce + gold
+─────────────────     ──────────────────────────            ─────────────────────
+Clientes              etl_erp_to_bronce                     bronce.erp_*
+Productos    ──────►  extract → normalize → load   ──────►  bronce.ingest_batch
+Ventas                                                      │
+                      etl_bronce_to_gold                    ▼
+                      extract → to_gold → load     ──────►  gold.dim_* / fact_*
+                                                            │
+Lambda tp-gold-api ◄────────────────────────────────────────┘
+(ALB :8088 /gold/query)   solo SELECT (api_reader)
+```
+
+Orquestación: `python labs/ecs/ecs.py --skip-infra --erp` (o Trigger en la UI Airflow `:8080`).  
+Preparación del origen: `python apps/etl/etl_demo.py` (levanta ERP + secret `dw/erp`).
+
+### Bases y schemas
+
+| Dónde | Rol | Quién escribe | Quién lee |
+|-------|-----|---------------|-----------|
+| **`postgres-erp`** (Compose) | Origen externo simulado | seed `apps/etl/erp/seed_erp.sql` | ETL extract |
+| **`postgres-bronce`** (Compose) | Stub de conectividad (camino A) | — | DAG `etl_rds_comprobation` |
+| **RDS `dw`** schema **`bronce`** | Landing / crudo | `etl_writer` (DAGs grupo 1) | ETL grupo 2 |
+| **RDS `dw`** schema **`gold`** | DW dimensional (TP) | `etl_writer` (DAG grupo 2) | Lambda `api_reader` |
+
+El seed IaC (`data/rds/seed_tp.sql`, con `apply_rds_seed=true`) crea schemas, roles, tablas gold y staging bronce genérico.
+
+### Schema `bronce` (RDS)
+
+| Tabla | Origen | Contenido |
+|-------|--------|-----------|
+| `ingest_batch` | seed + DAGs | Metadatos de cada carga |
+| `raw_record` | DAG `etl_rds_comprobation` | Payload JSON de prueba de conectividad |
+| `erp_clientes` / `erp_productos` / `erp_ventas` | DAG `etl_erp_to_bronce` | Landing columnar del ERP (DDL en `apps/etl/sql/bronce_erp_ddl.sql`) |
+
+### Schema `gold` (RDS) — modelo TP
+
+**6 dimensiones + 2 hechos** (acotado al integrador; geo y categoría van embebidas en cliente/producto):
+
+| Tipo | Tabla | Notas |
+|------|-------|--------|
+| Dim | `dim_fecha` | SK `AAAAMMDD` |
+| Dim | `dim_cliente` | + `pais` / `provincia` / `ciudad` |
+| Dim | `dim_producto` | + `rubro` / `familia` |
+| Dim | `dim_canal` | web / marketplace / tienda_fisica |
+| Dim | `dim_metodo_pago` | tarjeta / efectivo / … |
+| Dim | `dim_moneda` | ISO (ARS, …) |
+| Fact | `fact_venta_linea` | Grano: línea de pedido (carga el ETL ERP) |
+| Fact | `fact_venta_devolucion` | Lista para el TP; carga opcional |
+
+Allowlist API: esas 8 tablas (`apps/api/query_gold.py`). No existe `hecho_ventas`.
+
+### DAGs y módulos Python
+
+| DAG (`apps/airflow/dags/`) | Qué hace | Código de negocio (`apps/etl/`) |
+|----------------------------|----------|----------------------------------|
+| `etl_rds_comprobation` | Camino A: secrets + INSERT mínimo en `raw_record` | (lógica inline en el DAG) |
+| `etl_erp_to_bronce` | Grupo 1: ERP → `bronce.erp_*` | `extract/erp_foxpro.py` → `transform/normalize.py` → `load/to_cruda.py` |
+| `etl_bronce_to_gold` | Grupo 2: bronce → dims + `fact_venta_linea` | `extract/from_bronce.py` → `transform/to_gold.py` → `load/to_dw.py` |
+
+Conexiones vía Secrets Manager (MiniStack `:4567`):
+
+| Secret | Uso |
+|--------|-----|
+| `dw/erp` | Extract desde `postgres-erp` |
+| `dw/origen-demo` | Camino A (`postgres-bronce`) |
+| `dw/rds-etl` | Escritura bronce/gold (`etl_writer`) |
+| `dw/rds-api` | Lectura gold (`api_reader`, Lambda) |
+
+Detalle del paquete ETL: [`apps/etl/README.md`](apps/etl/README.md).
 
 ---
 
@@ -87,7 +163,7 @@ El resto de variables tiene defaults locales (`test`/`test`, `minioadmin`, `post
 
 ## 2. Dependencias Python (host)
 
-Hace falta si vas a correr demos (`ecs_demo`, `etl_demo`) o `aws` via `awscli-local`.  
+Hace falta si vas a correr demos (`ecs`, `etl_demo`) o `aws` via `awscli-local`.  
 Si solo usás Compose + imagen toolbox, podés saltearlo.
 
 ```bash
@@ -341,7 +417,7 @@ Login UI: Airflow `admin`/`admin` · pgAdmin `admin@example.com`/`admin` · MinI
 
 ### 5.5 API gold (cableado ALB → Lambda)
 
-Allowlist válida (no existe `hecho_ventas`): `dim_cliente`, `dim_producto`, `fact_venta_linea`, …
+Allowlist válida (no existe `hecho_ventas`): `dim_cliente`, `dim_producto`, `dim_fecha`, `dim_canal`, `dim_metodo_pago`, `dim_moneda`, `fact_venta_linea`, `fact_venta_devolucion`.
 
 ```bash
 # Tabla inválida → 400 (la Lambda está en línea)
@@ -375,9 +451,11 @@ Esperado: **0 to add, 0 to destroy**. Puede haber 4 `update in-place` cosmético
 
 ## 6. Runtime: ETL + Airflow + API gold
 
+Esquemas, tablas y DAGs: sección **[Datos: esquemas y procesamiento](#datos-esquemas-y-procesamiento)** arriba.
+
 Compose **ya** tiene Airflow (`:8080`) y ALB stand-in (`:8088`). El IaC dejó roles, RDS, secrets y la Lambda.
 
-### 6.1 Origen ERP + secret `dw/erp` (opcional pero recomendado)
+### 6.1 Origen ERP + secret `dw/erp` (recomendado antes del camino B)
 
 ```bash
 python apps/etl/etl_demo.py
@@ -388,12 +466,13 @@ python apps/etl/etl_demo.py
 Con la infra ya aplicada:
 
 ```bash
-python labs/ecs/ecs_demo.py --skip-infra           # camino A: conectividad → bronce
-python labs/ecs/ecs_demo.py --skip-infra --erp     # camino B: ERP → bronce → gold
+python labs/ecs/ecs.py --skip-infra           # camino A: conectividad → bronce
+python labs/ecs/ecs.py --skip-infra --erp     # camino B: ERP → bronce → gold
 ```
 
 UI Airflow: http://localhost:8080 (`admin` / `admin`).  
-DAGs: `apps/airflow/dags/` · logs: `apps/airflow/logs/`.
+DAGs: `apps/airflow/dags/` · logs: `apps/airflow/logs/`.  
+Orden camino B: `etl_erp_to_bronce` → `etl_bronce_to_gold`.
 
 ### 6.3 API gold (Qlik / Postman)
 

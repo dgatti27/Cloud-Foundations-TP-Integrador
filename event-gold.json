@@ -1,1 +1,0 @@
-{"table":"dim_cliente","columns":"nombre,email","condition":"segmento=retail","limit":5}
