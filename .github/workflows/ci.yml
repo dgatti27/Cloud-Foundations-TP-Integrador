@@ -120,6 +120,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validar compose.yaml
+        # Solo parsea el YAML; no levanta servicios. Dummy para satisfacer
+        # ${LOCALSTACK_AUTH_TOKEN:?...} (el token real solo hace falta en runtime local).
+        env:
+          LOCALSTACK_AUTH_TOKEN: ci-dummy-token
         run: docker compose -f compose.yaml config -q && echo "compose OK"
 
   finops:
