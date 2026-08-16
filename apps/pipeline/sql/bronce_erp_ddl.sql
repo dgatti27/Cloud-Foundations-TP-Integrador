@@ -1,16 +1,29 @@
--- Tablas estructuradas en schema bronce (landing ERP)
--- Se aplica sobre la RDS MiniStack (db dw). Idempotente.
--- Nota: el schema bronce ya existe (seed RDS). No hacemos CREATE SCHEMA
--- aquí: etl_writer tiene CREATE sobre el schema, no CREATE sobre la database.
+-- =============================================================================
+-- DDL landing ERP en schema bronce (RDS MiniStack, database `dw`)
+-- =============================================================================
+-- Quién lo aplica: pipeline.load.to_cruda.ensure_bronce_erp_ddl()
+--                  (también al inicio de load_erp_to_bronce)
+--
+-- Idempotente: CREATE TABLE IF NOT EXISTS.
+-- El schema `bronce` ya existe (seed RDS data/rds/seed_tp.sql).
+-- No hacemos CREATE SCHEMA aquí: etl_writer tiene CREATE sobre el schema,
+-- no CREATE DATABASE.
+-- =============================================================================
 
+-- ---------------------------------------------------------------------------
+-- Auditoría de cada corrida del grupo 1
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bronce.ingest_batch (
     batch_id      BIGSERIAL PRIMARY KEY,
-    origen        TEXT NOT NULL,
+    origen        TEXT NOT NULL,                 -- ej. 'erp'
     received_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    row_count     INT NOT NULL DEFAULT 0,
+    row_count     INT NOT NULL DEFAULT 0,        -- filas totales del batch
     status        TEXT NOT NULL DEFAULT 'received'
 );
 
+-- ---------------------------------------------------------------------------
+-- Landing columnar: espejo del origen Clientes
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bronce.erp_clientes (
     id_cliente       INT PRIMARY KEY,
     codigo           VARCHAR(20) NOT NULL,
@@ -36,6 +49,9 @@ CREATE TABLE IF NOT EXISTS bronce.erp_clientes (
     loaded_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ---------------------------------------------------------------------------
+-- Landing columnar: espejo del origen Productos
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bronce.erp_productos (
     id_producto      INT PRIMARY KEY,
     sku              VARCHAR(40) NOT NULL,
@@ -60,6 +76,9 @@ CREATE TABLE IF NOT EXISTS bronce.erp_productos (
     loaded_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ---------------------------------------------------------------------------
+-- Landing columnar: espejo del origen Ventas (líneas)
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bronce.erp_ventas (
     id_venta         INT PRIMARY KEY,
     nro_orden        VARCHAR(40) NOT NULL,

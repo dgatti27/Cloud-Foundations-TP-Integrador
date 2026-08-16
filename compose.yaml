@@ -43,7 +43,7 @@ x-airflow-env: &airflow_env
 x-airflow-volumes: &airflow_volumes
   - ./apps/airflow/dags:/opt/airflow/dags
   - ./apps/airflow/logs:/opt/airflow/logs
-  - ./apps/etl:/opt/airflow/packages/etl
+  - ./apps/pipeline:/opt/airflow/packages/pipeline
 
 services:
   # ---------------------------------------------------------------------------
@@ -94,7 +94,7 @@ services:
       - "${POSTGRES_ERP_PORT:-5434}:5432"
     volumes:
       - postgres-data-erp:/var/lib/postgresql/data
-      - ./apps/etl/erp/seed_erp.sql:/docker-entrypoint-initdb.d/01_seed_erp.sql:ro
+      - ./apps/pipeline/erp/seed_erp.sql:/docker-entrypoint-initdb.d/01_seed_erp.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB_ERP:-erp}"]
       interval: 5s

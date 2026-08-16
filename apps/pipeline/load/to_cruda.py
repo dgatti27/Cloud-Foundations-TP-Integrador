@@ -1,21 +1,34 @@
-"""Grupo 1 — carga en schema bronce (antes: base CRUDA).
+"""Grupo 1 — carga en schema `bronce` (landing / capa cruda).
 
-Escribe:
-  bronce.ingest_batch
-  bronce.erp_clientes / erp_productos / erp_ventas
+Escribe
+-------
+  bronce.ingest_batch          → auditoría de cada corrida
+  bronce.erp_clientes
+  bronce.erp_productos
+  bronce.erp_ventas
 
-Usa credencial dw/rds-etl (etl_writer).
+Credencial: `dw/rds-etl` (`etl_writer`).
+
+Quién lo llama
+--------------
+DAG `etl_erp_to_bronce`:
+  ensure_bronce_erp_ddl → … → load_erp_to_bronce(tables)
 """
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-from etl.config import rds_etl_conn
-from etl.db import connect
+from pipeline.config import rds_etl_conn
+from pipeline.db import connect
 
+# DDL idempotente (CREATE TABLE IF NOT EXISTS) de las tablas erp_*
 DDL_PATH = Path(__file__).resolve().parent.parent / "sql" / "bronce_erp_ddl.sql"
 
+# ---------------------------------------------------------------------------
+# Columnas del UPSERT (orden = orden del INSERT)
+# Deben coincidir con sql/bronce_erp_ddl.sql (sin loaded_at: lo pone DEFAULT).
+# ---------------------------------------------------------------------------
 _CLIENTES_COLS = [
     "id_cliente", "codigo", "nombre", "apellido", "email", "telefono",
     "documento", "tipo_doc", "direccion", "ciudad", "provincia", "codigo_postal",
@@ -37,7 +50,7 @@ _VENTAS_COLS = [
 
 
 def ensure_bronce_erp_ddl() -> None:
-    """Crea tablas ERP en bronce si no existen."""
+    """Aplica el DDL de landing ERP si las tablas no existen todavía."""
     sql = DDL_PATH.read_text(encoding="utf-8")
     conn = connect(rds_etl_conn())
     try:
@@ -50,6 +63,10 @@ def ensure_bronce_erp_ddl() -> None:
 
 
 def _upsert(conn, table: str, cols: list[str], rows: list[dict[str, Any]], pk: str) -> int:
+    """INSERT … ON CONFLICT (pk) DO UPDATE para una tabla bronce.erp_*.
+
+    Si la PK ya existe, pisa el resto de columnas (carga idempotente).
+    """
     if not rows:
         return 0
     placeholders = ", ".join(["%s"] * len(cols))
@@ -68,7 +85,7 @@ def _upsert(conn, table: str, cols: list[str], rows: list[dict[str, Any]], pk: s
 
 
 def load_to_cruda(records: list[dict[str, Any]], origen: str) -> int:
-    """Compat API vieja: espera lista normalize_records (payload). Preferir load_erp_to_bronce."""
+    """Compat API vieja (payload genérico). Preferir `load_erp_to_bronce`."""
     print(
         f"[load->cruda] API legacy origen={origen} filas={len(records)} "
         "(usar load_erp_to_bronce)"
@@ -80,7 +97,14 @@ def load_erp_to_bronce(
     tables: dict[str, list[dict[str, Any]]],
     origen: str = "erp",
 ) -> int:
-    """UPSERT clientes/productos/ventas en bronce + registra ingest_batch."""
+    """UPSERT de clientes/productos/ventas + registro en `ingest_batch`.
+
+    Flujo:
+      1) asegura DDL
+      2) inserta fila en ingest_batch → obtiene batch_id
+      3) estampa batch_id en cada fila
+      4) UPSERT de las tres tablas
+    """
     ensure_bronce_erp_ddl()
     conn = connect(rds_etl_conn())
     total = 0

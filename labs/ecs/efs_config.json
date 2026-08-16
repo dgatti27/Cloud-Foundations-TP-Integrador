@@ -2,7 +2,7 @@
   "_comment": "Inventario del EFS stand-in (Airflow DAGs + logs). Lo lee ecs.py; documenta Hobby vs AWS real.",
   "mode": "stand-in",
   "_docs_mode": "stand-in = apps/airflow/{dags,logs} montado en Compose. aws = create-file-system real (prod).",
-  "notes": "LocalStack Hobby no incluye EFS. DAGs del TP viven en apps/airflow/dags/ (≈ access point /airflow/dags). Logs en apps/airflow/logs/. El paquete apps/etl/ se monta aparte (PYTHONPATH).",
+  "notes": "LocalStack Hobby no incluye EFS. DAGs del TP viven en apps/airflow/dags/ (≈ access point /airflow/dags). Logs en apps/airflow/logs/. El paquete apps/pipeline/ se monta aparte (PYTHONPATH).",
   "_docs": {
     "dag_rds_comprobation": "Camino A: conectividad origen-demo → bronce.raw_record.",
     "dag_erp_to_bronce": "Grupo 1: postgres-erp → bronce.erp_*.",

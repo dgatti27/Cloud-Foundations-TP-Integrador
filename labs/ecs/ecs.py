@@ -31,7 +31,7 @@ Uso
     python labs/ecs/ecs.py --skip-infra --erp     # camino B
     python labs/ecs/ecs.py --cleanup
 
-IaC: infra/ · DAGs: apps/airflow/dags/ · origen ERP: apps/etl/etl_demo.py
+IaC: infra/ · DAGs: apps/airflow/dags/ · origen ERP: apps/pipeline/pipeline_demo.py
 """
 from __future__ import annotations
 
@@ -336,7 +336,7 @@ def step_origen_secret() -> None:
 # ── Paso 3.3 — Compose Airflow ────────────────────────────────────────────────
 
 def _compose_cmd(*args: str) -> list[str]:
-    # Compose único en la raíz; volúmenes relativos a compose.yaml (apps/airflow, apps/etl).
+    # Compose único en la raíz; volúmenes relativos a compose.yaml (apps/airflow, apps/pipeline).
     return ["docker", "compose", "-f", str(COMPOSE_FILE), *args]
 
 
@@ -544,18 +544,18 @@ def step_erp_camino_b(container: str) -> None:
             raise SystemExit(f"Falta DAG en EFS stand-in: {dag_file}")
         print(f"  ✓ EFS dags: {dag_file.name}")
 
-    # Secret ERP (etl_demo) debe existir
+    # Secret ERP (pipeline_demo) debe existir
     sm = client_ms("secretsmanager")
     try:
         sm.describe_secret(SecretId="dw/erp")
         print("  ✓ secret dw/erp")
     except ClientError as e:
         raise SystemExit(
-            "Falta dw/erp. Corré antes: python apps/etl/etl_demo.py\n"
+            "Falta dw/erp. Corré antes: python apps/pipeline/pipeline_demo.py\n"
             f"  {e}"
         ) from e
 
-    from etl.load.to_cruda import ensure_bronce_erp_ddl
+    from pipeline.load.to_cruda import ensure_bronce_erp_ddl
 
     os.environ.setdefault("SECRETS_ENDPOINT", ENDPOINT_MINISTACK)
     os.environ.setdefault("RDS_HOST_OVERRIDE", "localhost")

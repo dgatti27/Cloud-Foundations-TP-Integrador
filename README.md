@@ -23,7 +23,7 @@ Arquitectura: [`docs/`](docs/) · FinOps: [`docs/finops.md`](docs/finops.md) · 
 ├── infra/                     # única fuente IaC (tofu apply)
 │   └── modules/               # iam, vpc, s3, rds, secrets, lambda, ecs, cloudwatch, finops
 ├── apps/
-│   ├── etl/                   # paquete Python ETL (extract/transform/load)
+│   ├── pipeline/              # paquete Python ETL (extract/transform/load)
 │   ├── api/                   # Lambda handler + ALB stand-in
 │   └── airflow/               # DAGs + logs (≈ EFS)
 ├── data/rds/                  # seed_tp.sql
@@ -50,13 +50,13 @@ Lambda tp-gold-api ◄───────────────────�
 ```
 
 Orquestación: `python labs/ecs/ecs.py --skip-infra --erp` (o Trigger en la UI Airflow `:8080`).  
-Preparación del origen: `python apps/etl/etl_demo.py` (levanta ERP + secret `dw/erp`).
+Preparación del origen: `python apps/pipeline/pipeline_demo.py` (levanta ERP + secret `dw/erp`).
 
 ### Bases y schemas
 
 | Dónde | Rol | Quién escribe | Quién lee |
 |-------|-----|---------------|-----------|
-| **`postgres-erp`** (Compose) | Origen externo simulado | seed `apps/etl/erp/seed_erp.sql` | ETL extract |
+| **`postgres-erp`** (Compose) | Origen externo simulado | seed `apps/pipeline/erp/seed_erp.sql` | ETL extract |
 | **`postgres-bronce`** (Compose) | Stub de conectividad (camino A) | — | DAG `etl_rds_comprobation` |
 | **RDS `dw`** schema **`bronce`** | Landing / crudo | `etl_writer` (DAGs grupo 1) | ETL grupo 2 |
 | **RDS `dw`** schema **`gold`** | DW dimensional (TP) | `etl_writer` (DAG grupo 2) | Lambda `api_reader` |
@@ -69,7 +69,7 @@ El seed IaC (`data/rds/seed_tp.sql`, con `apply_rds_seed=true`) crea schemas, ro
 |-------|--------|-----------|
 | `ingest_batch` | seed + DAGs | Metadatos de cada carga |
 | `raw_record` | DAG `etl_rds_comprobation` | Payload JSON de prueba de conectividad |
-| `erp_clientes` / `erp_productos` / `erp_ventas` | DAG `etl_erp_to_bronce` | Landing columnar del ERP (DDL en `apps/etl/sql/bronce_erp_ddl.sql`) |
+| `erp_clientes` / `erp_productos` / `erp_ventas` | DAG `etl_erp_to_bronce` | Landing columnar del ERP (DDL en `apps/pipeline/sql/bronce_erp_ddl.sql`) |
 
 ### Schema `gold` (RDS) — modelo TP
 
@@ -90,7 +90,7 @@ Allowlist API: esas 8 tablas (`apps/api/query_gold.py`). No existe `hecho_ventas
 
 ### DAGs y módulos Python
 
-| DAG (`apps/airflow/dags/`) | Qué hace | Código de negocio (`apps/etl/`) |
+| DAG (`apps/airflow/dags/`) | Qué hace | Código de negocio (`apps/pipeline/`) |
 |----------------------------|----------|----------------------------------|
 | `etl_rds_comprobation` | Camino A: secrets + INSERT mínimo en `raw_record` | (lógica inline en el DAG) |
 | `etl_erp_to_bronce` | Grupo 1: ERP → `bronce.erp_*` | `extract/erp_foxpro.py` → `transform/normalize.py` → `load/to_cruda.py` |
@@ -105,7 +105,7 @@ Conexiones vía Secrets Manager (MiniStack `:4567`):
 | `dw/rds-etl` | Escritura bronce/gold (`etl_writer`) |
 | `dw/rds-api` | Lectura gold (`api_reader`, Lambda) |
 
-Detalle del paquete ETL: [`apps/etl/README.md`](apps/etl/README.md).
+Detalle del paquete ETL: [`apps/pipeline/README.md`](apps/pipeline/README.md).
 
 ---
 
@@ -163,7 +163,7 @@ El resto de variables tiene defaults locales (`test`/`test`, `minioadmin`, `post
 
 ## 2. Dependencias Python (host)
 
-Hace falta si vas a correr demos (`ecs`, `etl_demo`) o `aws` via `awscli-local`.  
+Hace falta si vas a correr demos (`ecs`, `pipeline_demo`) o `aws` via `awscli-local`.  
 Si solo usás Compose + imagen toolbox, podés saltearlo.
 
 ```bash
@@ -173,7 +173,7 @@ python -m pip install -r requirements.txt
 Opcional, solo ETL:
 
 ```bash
-python -m pip install -r apps/etl/requirements.txt
+python -m pip install -r apps/pipeline/requirements.txt
 ```
 
 Variables dummy para boto3 / AWS CLI en esta sesión:
@@ -458,7 +458,7 @@ Compose **ya** tiene Airflow (`:8080`) y ALB stand-in (`:8088`). El IaC dejó ro
 ### 6.1 Origen ERP + secret `dw/erp` (recomendado antes del camino B)
 
 ```bash
-python apps/etl/etl_demo.py
+python apps/pipeline/pipeline_demo.py
 ```
 
 ### 6.2 Orquestación ≈ Fargate (DAGs en EFS stand-in)

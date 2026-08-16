@@ -1,12 +1,31 @@
-"""DAG grupo 1: ERP Postgres → schema bronce.
+"""
+================================================================================
+DAG: etl_erp_to_bronce  (GRUPO 1 — camino ERP de negocio)
+================================================================================
 
-Stand-in Hobby (Compose ≈ Fargate + EFS). Orquesta el paquete apps/etl/:
-  1) ensure_bronce_ddl
-  2) extract_erp
-  3) transform_normalize
-  4) load_bronce
+Rol
+---
+Orquesta el paquete `apps/pipeline/` para llevar datos del Postgres origen
+(`postgres-erp`) al schema `bronce` de la RDS MiniStack.
 
-DAGs viven en apps/airflow/dags/ (≈ EFS /airflow/dags).
+Stand-in Hobby
+--------------
+En Compose, este archivo vive en `apps/airflow/dags/` y se monta en
+`/opt/airflow/dags` (≈ access point EFS de DAGs en AWS Fargate).
+La lógica de datos NO está acá: está en `pipeline.extract|transform|load`.
+
+Orden de tasks (obligatorio)
+----------------------------
+  ensure_bronce_ddl >> extract_erp >> transform_normalize >> load_bronce
+
+Cómo dispararlo
+---------------
+  schedule=None → solo manual (UI Airflow o CLI).
+  Después de OK, correr `etl_bronce_to_gold` (grupo 2).
+
+default_args
+------------
+No se usa: no es obligatorio. El TP no necesita retries/owner compartidos.
 """
 from __future__ import annotations
 
@@ -16,21 +35,35 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 
 
+# ---------------------------------------------------------------------------
+# Tasks — cada una importa pipeline *dentro* de la función
+# (evita fallar el parseo del DAG si el worker aún no tiene deps listas)
+# ---------------------------------------------------------------------------
 def task_ensure_ddl(**_):
-    from etl.load.to_cruda import ensure_bronce_erp_ddl
+    """Crea tablas bronce.erp_* / ingest_batch si no existen (DDL idempotente)."""
+    from pipeline.load.to_cruda import ensure_bronce_erp_ddl
 
     ensure_bronce_erp_ddl()
 
 
 def task_extract(**context):
-    from etl.extract.erp_foxpro import extract_erp_all
+    """Lee Clientes/Productos/Ventas del ERP → dict en memoria → XCom `erp_raw`.
+
+    `context["ti"]` = TaskInstance de Airflow; XCom pasa datos a la task siguiente.
+    `_serialize` convierte Decimal/date a tipos JSON-safe antes del push.
+    """
+    from pipeline.extract.erp_foxpro import extract_erp_all
 
     data = extract_erp_all()
     context["ti"].xcom_push(key="erp_raw", value=_serialize(data))
 
 
 def task_transform(**context):
-    from etl.transform.normalize import normalize_erp_bundle
+    """Limpieza ligera (strip, metadatos). NO modela gold todavía.
+
+    Pull de XCom `erp_raw` (task extract_erp) → push `erp_clean`.
+    """
+    from pipeline.transform.normalize import normalize_erp_bundle
 
     raw = _deserialize(context["ti"].xcom_pull(key="erp_raw", task_ids="extract_erp"))
     clean = normalize_erp_bundle(raw)
@@ -38,15 +71,19 @@ def task_transform(**context):
 
 
 def task_load(**context):
-    from etl.load.to_cruda import load_erp_to_bronce
+    """UPSERT a bronce.erp_* + registro en ingest_batch (credencial dw/rds-etl)."""
+    from pipeline.load.to_cruda import load_erp_to_bronce
 
     clean = _deserialize(context["ti"].xcom_pull(key="erp_clean", task_ids="transform_normalize"))
     n = load_erp_to_bronce(clean, origen="erp")
     print(f"OK erp→bronce filas={n}")
 
 
+# ---------------------------------------------------------------------------
+# Helpers XCom — el metadata DB de Airflow serializa valores como JSON
+# ---------------------------------------------------------------------------
 def _serialize(tables: dict) -> dict:
-    """JSON-friendly: dates/decimals → str/float."""
+    """Decimal → float ; date/datetime → ISO string. Evita TypeError en xcom_push."""
     from datetime import date, datetime
     from decimal import Decimal
 
@@ -69,9 +106,17 @@ def _serialize(tables: dict) -> dict:
 
 
 def _deserialize(tables: dict) -> dict:
+    """XCom ya devolvió dict; solo normaliza None → {}."""
     return tables or {}
 
 
+# ---------------------------------------------------------------------------
+# Definición del DAG
+# ---------------------------------------------------------------------------
+# start_date  → desde cuándo Airflow considera el DAG “activo” (histórico)
+# schedule    → None = solo trigger manual (adecuado al TP / demos)
+# catchup     → False = no rellena corridas pasadas al activarlo
+# tags        → filtros en la UI
 with DAG(
     dag_id="etl_erp_to_bronce",
     start_date=datetime(2026, 1, 1),
@@ -79,8 +124,11 @@ with DAG(
     catchup=False,
     tags=["tp", "bronce", "grupo1", "erp"],
 ) as dag:
+    # PythonOperator: ejecuta un callable Python en el worker
     t0 = PythonOperator(task_id="ensure_bronce_ddl", python_callable=task_ensure_ddl)
     t1 = PythonOperator(task_id="extract_erp", python_callable=task_extract)
     t2 = PythonOperator(task_id="transform_normalize", python_callable=task_transform)
     t3 = PythonOperator(task_id="load_bronce", python_callable=task_load)
+
+    # Dependencias: t0 debe terminar OK antes de t1, etc.
     t0 >> t1 >> t2 >> t3

@@ -1,16 +1,24 @@
 """
-Demo: origen ERP + paquete etl/.
+Demo de host: prepara el origen ERP para el camino B (sin correr el ETL).
 
-Qué hace
---------
-1) Levanta postgres-erp y cuenta filas Clientes/Productos/Ventas
-2) Publica secret dw/erp en MiniStack
-3) Remite a Airflow (python labs/ecs/ecs.py --skip-infra --erp)
+Qué hace (en orden)
+-------------------
+1) `docker compose up -d postgres-erp` y espera `pg_isready`.
+2) Cuenta filas en Clientes / Productos / Ventas; si faltan, aplica
+   `erp/seed_erp.sql`.
+3) Crea o actualiza el secret `dw/erp` en MiniStack (para que Airflow
+   pueda resolver la conexión del extractor).
+4) Imprime el siguiente comando: `python labs/ecs/ecs.py --skip-infra --erp`
+
+Qué NO hace
+-----------
+No escribe bronce ni gold. Eso lo orquestan los DAGs
+`etl_erp_to_bronce` y `etl_bronce_to_gold`.
 
 Uso
 ---
-    python apps/etl/etl_demo.py
-    python apps/etl/etl_demo.py --skip-secret
+    python apps/pipeline/pipeline_demo.py
+    python apps/pipeline/pipeline_demo.py --skip-secret
 """
 
 from __future__ import annotations
@@ -25,17 +33,23 @@ from pathlib import Path
 import boto3
 from botocore.exceptions import ClientError
 
-ETL_DIR = Path(__file__).resolve().parent
+# ---------------------------------------------------------------------------
+# Constantes de entorno local del TP
+# ---------------------------------------------------------------------------
+ETL_DIR = Path(__file__).resolve().parent  # apps/pipeline/
 REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 ENDPOINT_MS = os.environ.get("MINISTACK_ENDPOINT", "http://localhost:4567")
 ORIGEN_SECRET = "dw/erp"
 
+# Credenciales dummy del emulador (MiniStack / LocalStack-like)
 _CREDS = dict(
     region_name=REGION,
     aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "test"),
     aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "test"),
 )
 
+# Payload que guardamos en Secrets Manager: hostname Docker de Compose.
+# Desde contenedores Airflow, `postgres-erp` resuelve por red interna.
 ERP_PAYLOAD = {
     "host": "postgres-erp",
     "port": 5432,
@@ -47,6 +61,7 @@ ERP_PAYLOAD = {
 
 
 def _run(cmd: list[str], check: bool = True, input_text: str | None = None) -> subprocess.CompletedProcess:
+    """Ejecuta un comando de shell y lo imprime (para seguir el demo)."""
     print(f"  $ {' '.join(cmd)}")
     return subprocess.run(
         cmd,
@@ -59,9 +74,15 @@ def _run(cmd: list[str], check: bool = True, input_text: str | None = None) -> s
     )
 
 
+# ---------------------------------------------------------------------------
+# Paso 1 — origen Postgres ERP
+# ---------------------------------------------------------------------------
 def step_erp_up() -> None:
+    """Levanta el contenedor, espera ready y verifica/aplica el seed."""
     print("1. Postgres ERP (origen)")
     _run(["docker", "compose", "up", "-d", "postgres-erp"], check=True)
+
+    # Espera hasta ~30s a que Postgres acepte conexiones
     for _ in range(30):
         r = _run(
             ["docker", "exec", "postgres-erp", "pg_isready", "-U", "postgres", "-d", "erp"],
@@ -73,6 +94,7 @@ def step_erp_up() -> None:
     else:
         raise SystemExit("postgres-erp no quedó ready")
 
+    # Conteos por tabla (identifiers quoted: mayúsculas del seed)
     sql = (
         'SELECT \'Clientes\' t, count(*) FROM "Clientes" '
         'UNION ALL SELECT \'Productos\', count(*) FROM "Productos" '
@@ -82,6 +104,7 @@ def step_erp_up() -> None:
         ["docker", "exec", "-i", "postgres-erp", "psql", "-U", "postgres", "-d", "erp", "-c", sql],
         check=False,
     )
+    # Si las tablas no existen aún, aplicamos el seed a mano
     if r.returncode != 0:
         seed = (ETL_DIR / "erp" / "seed_erp.sql").read_text(encoding="utf-8")
         print("  · aplicando seed_erp.sql…")
@@ -97,7 +120,11 @@ def step_erp_up() -> None:
     print(r.stdout)
 
 
+# ---------------------------------------------------------------------------
+# Paso 2 — secret dw/erp en MiniStack
+# ---------------------------------------------------------------------------
 def step_secret() -> None:
+    """Crea el secret o lo actualiza si ya existía (idempotente)."""
     print("2. Secret dw/erp (MiniStack)")
     sm = boto3.client("secretsmanager", endpoint_url=ENDPOINT_MS, **_CREDS)
     body = json.dumps(ERP_PAYLOAD)
@@ -115,12 +142,19 @@ def step_secret() -> None:
     print(f"  · Name={name} (host=postgres-erp para Airflow en red Docker)")
 
 
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 def main() -> int:
-    parser = argparse.ArgumentParser(description="ERP + paquete etl/")
-    parser.add_argument("--skip-secret", action="store_true")
+    parser = argparse.ArgumentParser(description="ERP + paquete pipeline/")
+    parser.add_argument(
+        "--skip-secret",
+        action="store_true",
+        help="Solo levanta ERP; no toca Secrets Manager",
+    )
     args = parser.parse_args()
 
-    print("=== origen ERP + paquete etl/ ===\n")
+    print("=== origen ERP + paquete pipeline/ ===\n")
     print(f"  MiniStack: {ENDPOINT_MS}\n")
 
     step_erp_up()

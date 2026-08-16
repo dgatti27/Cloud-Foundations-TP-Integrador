@@ -1,11 +1,24 @@
 """Transformaciones grupo 2: bronce ERP → filas listas para dims/facts gold.
 
-Mapeo ERP → gold (modelo TP: 6 dims + fact_venta_linea):
-  bronce.erp_clientes  → gold.dim_cliente  (geo embebida)
-  bronce.erp_productos → gold.dim_producto (rubro/familia embebidos)
-  bronce.erp_ventas    → gold.fact_venta_linea (+ dim_fecha/canal/pago/moneda)
+Modelo TP (decisión del repo)
+--------------------------------
+6 dimensiones + 1 fact de ventas:
+  dim_fecha, dim_cliente, dim_producto, dim_canal, dim_metodo_pago, dim_moneda
+  fact_venta_linea
 
-SKs: IDs del ERP como surrogate keys (trazable; en prod SCD2 reales).
+Mapeo desde bronce:
+  erp_clientes  → dim_cliente   (geo embebida en la dim, sin dim_geo aparte)
+  erp_productos → dim_producto  (rubro/familia embebidos)
+  erp_ventas    → fact_venta_linea + dims de apoyo (fecha/canal/pago/moneda)
+
+Surrogate keys (SK)
+-------------------
+Se reutilizan los IDs del ERP (`id_cliente`, etc.) como SK.
+Es trazable para el TP; en producción habría SCD2 / SKs propias.
+
+Quién lo llama
+--------------
+DAG `etl_bronce_to_gold` → `transform_to_gold(clientes, productos, ventas)`.
 """
 from __future__ import annotations
 
@@ -14,7 +27,11 @@ from datetime import date, datetime
 from typing import Any
 
 
+# ---------------------------------------------------------------------------
+# Helpers de tipado / claves
+# ---------------------------------------------------------------------------
 def _d(v) -> date | None:
+    """Normaliza valor a `date` (None si viene vacío)."""
     if v is None:
         return None
     if isinstance(v, datetime):
@@ -25,10 +42,12 @@ def _d(v) -> date | None:
 
 
 def _fecha_sk(d: date) -> int:
+    """SK de fecha tipo YYYYMMDD (ej. 20240601)."""
     return int(d.strftime("%Y%m%d"))
 
 
 def _hash_diff(*parts: Any) -> str:
+    """Hash de atributos de negocio para detectar cambios (SCD-like)."""
     blob = "|".join("" if p is None else str(p) for p in parts)
     return hashlib.md5(blob.encode("utf-8")).hexdigest()
 
@@ -38,9 +57,15 @@ def transform_to_gold(
     productos: list[dict[str, Any]],
     ventas: list[dict[str, Any]],
 ) -> dict[str, list[dict[str, Any]]]:
-    """Devuelve dict con listas listas para UPSERT/INSERT en gold.*."""
+    """Arma el bundle completo listo para UPSERT en `gold.*`.
+
+    Retorno: dict con claves
+      dim_fecha, dim_canal, dim_metodo_pago, dim_moneda,
+      dim_cliente, dim_producto, fact_venta_linea
+    """
     hoy = date.today()
 
+    # ----- dim_cliente ------------------------------------------------------
     dim_cliente = []
     for c in clientes:
         bk = c.get("codigo") or str(c["id_cliente"])
@@ -65,6 +90,7 @@ def transform_to_gold(
             }
         )
 
+    # ----- dim_producto -----------------------------------------------------
     dim_producto = []
     for p in productos:
         dim_producto.append(
@@ -85,17 +111,22 @@ def transform_to_gold(
             }
         )
 
+    # ----- dims de apoyo derivadas de cada venta ----------------------------
+    # Se deduplican en dicts locales mientras se recorre el fact.
     canales: dict[str, dict] = {}
     pagos: dict[str, dict] = {}
     monedas: dict[str, dict] = {}
     fechas: dict[int, dict] = {}
     canal_i = pago_i = moneda_i = 1
 
+    # ----- fact_venta_linea -------------------------------------------------
     fact = []
     for v in ventas:
         fd = _d(v["fecha_venta"])
         assert fd is not None
         fsk = _fecha_sk(fd)
+
+        # dim_fecha: una fila por fecha distinta presente en ventas
         if fsk not in fechas:
             fechas[fsk] = {
                 "fecha_sk": fsk,

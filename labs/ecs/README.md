@@ -17,7 +17,7 @@ $env:AWS_ACCESS_KEY_ID = "test"
 $env:AWS_SECRET_ACCESS_KEY = "test"
 $env:AWS_DEFAULT_REGION = "us-east-1"
 
-python apps/etl/etl_demo.py                              # origen ERP + dw/erp
+python apps/pipeline/pipeline_demo.py                              # origen ERP + dw/erp
 python labs/ecs/ecs.py --skip-infra --erp                # DAGs ERP→bronce→gold
 # UI http://localhost:8080  admin/admin
 ```

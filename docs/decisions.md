@@ -216,4 +216,4 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 - Facts: `fact_venta_linea` (carga el ETL), `fact_venta_devolucion` (creada, carga opcional)
 - Geo y categoría embebidas en cliente/producto
 
-**Resultado:** `data/rds/seed_tp.sql` + `apps/etl/transform/to_gold.py` + allowlist en `apps/api/query_gold.py`.
+**Resultado:** `data/rds/seed_tp.sql` + `apps/pipeline/transform/to_gold.py` + allowlist en `apps/api/query_gold.py`.

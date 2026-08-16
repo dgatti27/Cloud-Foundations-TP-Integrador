@@ -1,12 +1,29 @@
-"""Grupo 2 — carga dimensional en schema gold (modelo TP)."""
+"""Grupo 2 — carga dimensional en schema `gold` (modelo TP).
+
+Escribe (en orden de `_SPECS`)
+--------------------------------
+  gold.dim_fecha / dim_canal / dim_metodo_pago / dim_moneda
+  gold.dim_cliente / dim_producto
+  gold.fact_venta_linea
+
+Las tablas gold las crea el seed RDS (`data/rds/seed_tp.sql`).
+Este módulo solo hace UPSERT de filas ya transformadas.
+
+Quién lo llama
+--------------
+DAG `etl_bronce_to_gold` → `load_gold_bundle(bundle)`.
+"""
 from __future__ import annotations
 
 from typing import Any
 
-from etl.config import rds_etl_conn
-from etl.db import connect
+from pipeline.config import rds_etl_conn
+from pipeline.db import connect
 
-# (tabla, pk, columnas) — orden: dims de apoyo → maestros → fact
+# ---------------------------------------------------------------------------
+# Especificación de carga: (tabla, primary key, columnas)
+# Orden: dims de apoyo → maestros → fact (respeta FKs lógicas).
+# ---------------------------------------------------------------------------
 _SPECS: list[tuple[str, str, list[str]]] = [
     ("gold.dim_fecha", "fecha_sk", [
         "fecha_sk", "fecha", "anio", "trimestre", "mes", "nombre_mes",
@@ -42,9 +59,11 @@ _SPECS: list[tuple[str, str, list[str]]] = [
 
 
 def _upsert(conn, table: str, pk: str, cols: list[str], rows: list[dict[str, Any]]) -> int:
+    """INSERT … ON CONFLICT (pk) DO UPDATE sobre una tabla gold.*."""
     if not rows:
         return 0
     placeholders = ", ".join(["%s"] * len(cols))
+    # Identifiers quoted: columnas gold pueden ser case-sensitive según seed
     col_list = ", ".join(f'"{c}"' for c in cols)
     updates = ", ".join(f'"{c}"=EXCLUDED."{c}"' for c in cols if c != pk)
     sql = (
@@ -64,7 +83,11 @@ def load_to_dw() -> int:
 
 
 def load_gold_bundle(bundle: dict[str, list[dict[str, Any]]]) -> int:
-    """UPSERT de todas las piezas transformadas hacia gold.*."""
+    """UPSERT de todas las piezas del dict que devolvió `transform_to_gold`.
+
+    `bundle` usa claves cortas (`dim_fecha`, …);
+    `_SPECS` usa nombres calificados `gold.dim_fecha` → se mapean en `key_map`.
+    """
     conn = connect(rds_etl_conn())
     total = 0
     try:

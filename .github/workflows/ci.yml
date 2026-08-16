@@ -26,13 +26,13 @@ jobs:
       - name: Instalar herramientas
         run: python -m pip install --upgrade pip ruff
       - name: Instalar dependencias ETL
-        run: pip install -r apps/etl/requirements.txt
+        run: pip install -r apps/pipeline/requirements.txt
       - name: Lint (ruff, errores reales)
-        run: ruff check --select E9,F63,F7,F82 apps/etl apps/airflow/dags apps/api
+        run: ruff check --select E9,F63,F7,F82 apps/pipeline apps/airflow/dags apps/api
       - name: Compilar (py_compile)
         run: |
           set -euo pipefail
-          mapfile -t etl_py < <(git ls-files 'apps/etl/**/*.py' 'apps/etl/*.py')
+          mapfile -t etl_py < <(git ls-files 'apps/pipeline/**/*.py' 'apps/pipeline/*.py')
           mapfile -t dag_py < <(git ls-files 'apps/airflow/dags/*.py')
           mapfile -t api_py < <(git ls-files 'apps/api/*.py')
           python -m py_compile "${etl_py[@]}" "${dag_py[@]}" "${api_py[@]}"
@@ -42,9 +42,9 @@ jobs:
           PYTHONPATH: apps
         run: |
           python - <<'PY'
-          from etl.extract import EXTRACTORS
-          from etl.transform import normalize_records, transform_to_gold
-          from etl.load import load_to_cruda, load_to_dw
+          from pipeline.extract import EXTRACTORS
+          from pipeline.transform import normalize_records, transform_to_gold
+          from pipeline.load import load_to_cruda, load_to_dw
 
           expected = {"erp", "erp-foxpro", "bronce"}
           assert set(EXTRACTORS) == expected, EXTRACTORS

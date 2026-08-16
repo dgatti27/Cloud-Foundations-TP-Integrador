@@ -1,6 +1,18 @@
--- Base ERP (origen grupo 1)
--- Tablas: Clientes, Productos, Ventas (≥10 columnas, ≥10 filas cada una)
+-- =============================================================================
+-- Seed del origen ERP (Postgres Compose: servicio `postgres-erp`, DB `erp`)
+-- =============================================================================
+-- Quién lo aplica:
+--   - docker-entrypoint al crear el volumen (compose monta este archivo), o
+--   - pipeline_demo.py si las tablas aún no existen
+--
+-- Identifiers entre comillas ("Clientes"): mayúsculas exactas.
+-- El extractor usa los mismos nombres quoted en SELECT.
+-- Requisito TP: ≥10 columnas y ≥10 filas por tabla.
+-- =============================================================================
 
+-- ---------------------------------------------------------------------------
+-- Tabla origen: Clientes
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS "Clientes" (
     id_cliente       SERIAL PRIMARY KEY,
     codigo           VARCHAR(20)  NOT NULL UNIQUE,
@@ -24,6 +36,9 @@ CREATE TABLE IF NOT EXISTS "Clientes" (
     updated_at       TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
+-- ---------------------------------------------------------------------------
+-- Tabla origen: Productos
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS "Productos" (
     id_producto      SERIAL PRIMARY KEY,
     sku              VARCHAR(40)  NOT NULL UNIQUE,
@@ -46,6 +61,9 @@ CREATE TABLE IF NOT EXISTS "Productos" (
     updated_at       TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
+-- ---------------------------------------------------------------------------
+-- Tabla origen: Ventas (líneas de orden; FK a Clientes y Productos)
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS "Ventas" (
     id_venta         SERIAL PRIMARY KEY,
     nro_orden        VARCHAR(40)  NOT NULL,
@@ -70,6 +88,9 @@ CREATE TABLE IF NOT EXISTS "Ventas" (
     UNIQUE (nro_orden, linea_nro)
 );
 
+-- ---------------------------------------------------------------------------
+-- Datos demo: Clientes (≥10 filas)
+-- ---------------------------------------------------------------------------
 INSERT INTO "Clientes" (
     codigo, nombre, apellido, email, telefono, documento, tipo_doc,
     direccion, ciudad, provincia, codigo_postal, pais, segmento, tipo_cliente,
@@ -88,6 +109,9 @@ INSERT INTO "Clientes" (
 ('C011','Karina','Molina','karina.m@corp.com','1111111121','30555001','CUIT','Perú 15','CABA','CABA','1002','Argentina','mayorista','B2B','2024-01-20',TRUE,500000,2),
 ('C012','Luis','Castro','luis.castro@mail.com','1111111122','30222001','DNI','Chile 88','CABA','CABA','1003','Argentina','premium','B2C','2024-02-21',TRUE,120000,3);
 
+-- ---------------------------------------------------------------------------
+-- Datos demo: Productos (≥10 filas)
+-- ---------------------------------------------------------------------------
 INSERT INTO "Productos" (
     sku, ean, nombre, descripcion, marca, rubro, familia, subfamilia,
     precio_lista, costo, stock, unidad, peso_kg, activo, fecha_alta,
@@ -106,6 +130,9 @@ INSERT INTO "Productos" (
 ('SKU-011','7790001000011','Hub USB-C','Hub 7 en 1','TechBrand','Electrónica','Periféricos','Hubs',35000,18000,100,'UN',0.200,TRUE,'2023-05-15','PROV-A',21),
 ('SKU-012','7790001000012','Disco externo 2TB','HDD USB 3.0','FastDisk','Electrónica','Almacenamiento','HDD',90000,55000,60,'UN',0.220,TRUE,'2023-06-01','PROV-C',21);
 
+-- ---------------------------------------------------------------------------
+-- Datos demo: Ventas (≥10 filas / líneas)
+-- ---------------------------------------------------------------------------
 INSERT INTO "Ventas" (
     nro_orden, linea_nro, id_cliente, id_producto, fecha_venta,
     cantidad, precio_unitario, descuento, importe_bruto, importe_neto,

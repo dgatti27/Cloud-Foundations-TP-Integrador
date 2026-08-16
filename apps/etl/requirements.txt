@@ -1,3 +1,0 @@
-# Dependencias ETL (DAGs + paquete apps/etl)
-psycopg2-binary>=2.9
-boto3>=1.34
