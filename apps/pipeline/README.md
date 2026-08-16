@@ -33,15 +33,18 @@ postgres-erp                    RDS MiniStack (db dw)
 
 ### Antes de arrancar (preparación)
 
+Con el stack levantado (`docker compose up -d`) + IaC (`tofu apply`) alcanza:
+
 | Paso | Qué | Dónde |
 |---|---|---|
-| 0a | Semilla del origen (`Clientes` / `Productos` / `Ventas`) | `erp/seed_erp.sql` (Compose o `pipeline_demo.py`) |
-| 0b | Secret `dw/erp` con host `postgres-erp` | MiniStack ← `pipeline_demo.py` |
+| 0a | Semilla del origen (`Clientes` / `Productos` / `Ventas`) | Compose monta `erp/seed_erp.sql` en `postgres-erp` (`initdb`) |
+| 0b | Secret `dw/erp` con host `postgres-erp` | OpenTofu → módulo `infra/modules/secrets` |
 | 0c | Secret `dw/rds-etl` (`etl_writer`) + schemas bronce/gold | IaC + `data/rds/seed_tp.sql` |
 | 0d | Airflow con `PYTHONPATH` → paquete `pipeline` | Compose monta `./apps/pipeline` |
 
 ```powershell
-python apps/pipeline/pipeline_demo.py
+docker compose up -d
+# tofu apply (host o: docker compose --profile iac run --rm tp-iac apply)
 python labs/ecs/ecs.py --skip-infra --erp
 ```
 
@@ -105,8 +108,7 @@ Credenciales usadas en el camino:
 | [`__init__.py`](./__init__.py) | Marca el paquete; resume extract → transform → load |
 | [`config.py`](./config.py) | Resuelve credenciales (env / Secrets Manager) |
 | [`db.py`](./db.py) | `connect` + `fetch_dicts` (psycopg2) |
-| [`pipeline_demo.py`](./pipeline_demo.py) | Solo preparación: ERP + secret (no corre el ETL) |
-| [`erp/seed_erp.sql`](./erp/seed_erp.sql) | Semilla del origen Compose |
+| [`erp/seed_erp.sql`](./erp/seed_erp.sql) | Semilla del origen Compose (`postgres-erp`) |
 | [`extract/erp_foxpro.py`](./extract/erp_foxpro.py) | Grupo 1: lee ERP → memoria |
 | [`extract/from_bronce.py`](./extract/from_bronce.py) | Grupo 2: lee `bronce.erp_*` |
 | [`transform/normalize.py`](./transform/normalize.py) | Grupo 1: limpieza ligera |

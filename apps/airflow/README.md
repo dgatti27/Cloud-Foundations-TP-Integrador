@@ -77,10 +77,7 @@ Usuario demo del init: `admin` / `admin`.
 ## Disparo rápido
 
 ```powershell
-# Preparar origen ERP + secret dw/erp
-python apps/pipeline/pipeline_demo.py
-
-# Levantar / verificar stack Airflow (según tu flujo del TP)
+# Stack + IaC ya deben haber dejado postgres-erp (seed) y secret dw/erp
 python labs/ecs/ecs.py --skip-infra --erp
 ```
 

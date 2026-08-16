@@ -50,7 +50,7 @@ Lambda tp-gold-api ◄───────────────────�
 ```
 
 Orquestación: `python labs/ecs/ecs.py --skip-infra --erp` (o Trigger en la UI Airflow `:8080`).  
-Preparación del origen: `python apps/pipeline/pipeline_demo.py` (levanta ERP + secret `dw/erp`).
+Origen ERP: Compose (`postgres-erp` + seed) · secret `dw/erp`: OpenTofu (`tofu apply`).
 
 ### Bases y schemas
 
@@ -163,7 +163,7 @@ El resto de variables tiene defaults locales (`test`/`test`, `minioadmin`, `post
 
 ## 2. Dependencias Python (host)
 
-Hace falta si vas a correr demos (`ecs`, `pipeline_demo`) o `aws` via `awscli-local`.  
+Hace falta si vas a correr demos (`ecs`) o `aws` via `awscli-local`.  
 Si solo usás Compose + imagen toolbox, podés saltearlo.
 
 ```bash
@@ -455,11 +455,14 @@ Esquemas, tablas y DAGs: sección **[Datos: esquemas y procesamiento](#datos-esq
 
 Compose **ya** tiene Airflow (`:8080`) y ALB stand-in (`:8088`). El IaC dejó roles, RDS, secrets y la Lambda.
 
-### 6.1 Origen ERP + secret `dw/erp` (recomendado antes del camino B)
+### 6.1 Origen ERP + secret `dw/erp`
 
-```bash
-python apps/pipeline/pipeline_demo.py
-```
+Con el stack ya arriba no hace falta un script demo:
+
+- **Datos:** `postgres-erp` aplica `apps/pipeline/erp/seed_erp.sql` al crear el volumen.
+- **Secret:** `tofu apply` crea `dw/erp` (host `postgres-erp`) en MiniStack.
+
+Si el volumen ERP ya existía vacío, recrealo (`docker compose down` + borrar el volumen `postgres-data-erp`) o aplicá el seed a mano con `psql`.
 
 ### 6.2 Orquestación ≈ Fargate (DAGs en EFS stand-in)
 

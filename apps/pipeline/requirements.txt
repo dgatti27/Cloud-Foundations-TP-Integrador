@@ -2,6 +2,6 @@
 # Instalar: pip install -r apps/pipeline/requirements.txt
 #
 # psycopg2-binary  → connect/fetch a Postgres (ERP + RDS)
-# boto3            → Secrets Manager (MiniStack) desde config / pipeline_demo
+# boto3            → Secrets Manager (MiniStack) desde config.py / DAGs
 psycopg2-binary>=2.9
 boto3>=1.34

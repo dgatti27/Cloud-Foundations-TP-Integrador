@@ -31,7 +31,7 @@ Uso
     python labs/ecs/ecs.py --skip-infra --erp     # camino B
     python labs/ecs/ecs.py --cleanup
 
-IaC: infra/ · DAGs: apps/airflow/dags/ · origen ERP: apps/pipeline/pipeline_demo.py
+IaC: infra/ · DAGs: apps/airflow/dags/ · origen ERP: Compose postgres-erp + secret dw/erp (tofu)
 """
 from __future__ import annotations
 
@@ -544,14 +544,15 @@ def step_erp_camino_b(container: str) -> None:
             raise SystemExit(f"Falta DAG en EFS stand-in: {dag_file}")
         print(f"  ✓ EFS dags: {dag_file.name}")
 
-    # Secret ERP (pipeline_demo) debe existir
+    # Secret ERP (tofu apply → infra/modules/secrets) debe existir
     sm = client_ms("secretsmanager")
     try:
         sm.describe_secret(SecretId="dw/erp")
         print("  ✓ secret dw/erp")
     except ClientError as e:
         raise SystemExit(
-            "Falta dw/erp. Corré antes: python apps/pipeline/pipeline_demo.py\n"
+            "Falta dw/erp. Aplicá IaC primero (tofu apply / tp-iac apply) "
+            "y asegurate de que postgres-erp esté up (docker compose).\n"
             f"  {e}"
         ) from e
 

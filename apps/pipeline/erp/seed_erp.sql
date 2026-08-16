@@ -2,8 +2,8 @@
 -- Seed del origen ERP (Postgres Compose: servicio `postgres-erp`, DB `erp`)
 -- =============================================================================
 -- Quién lo aplica:
---   - docker-entrypoint al crear el volumen (compose monta este archivo), o
---   - pipeline_demo.py si las tablas aún no existen
+--   docker-entrypoint al crear el volumen (Compose monta este archivo en
+--   postgres-erp → /docker-entrypoint-initdb.d/). Solo corre la 1ª vez del volumen.
 --
 -- Identifiers entre comillas ("Clientes"): mayúsculas exactas.
 -- El extractor usa los mismos nombres quoted en SELECT.

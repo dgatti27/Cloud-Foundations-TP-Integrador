@@ -16,11 +16,12 @@ Mapa de carpetas
   extract/     Lee orígenes → filas en memoria (dicts).
   transform/   Limpia (grupo 1) o modela dims/facts (grupo 2).
   load/        Escribe en RDS: schema bronce, luego schema gold.
-  erp/         Seed SQL del Postgres origen (`postgres-erp`).
+  erp/         Seed SQL del Postgres origen (`postgres-erp`; Compose initdb).
   sql/         DDL de tablas landing `bronce.erp_*`.
   config.py    Cómo obtener credenciales (env / Secrets Manager).
   db.py        Helpers psycopg2 compartidos.
-  pipeline_demo.py  Script host: levanta ERP + secret `dw/erp`.
+
+Preparación (sin script demo): Compose levanta ERP+seed; `tofu apply` crea `dw/erp`.
 
 Flujo camino B (ERP)
 -------------------
