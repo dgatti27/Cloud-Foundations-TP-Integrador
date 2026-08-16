@@ -28,6 +28,8 @@ DDL_PATH = Path(__file__).resolve().parent.parent / "sql" / "bronce_erp_ddl.sql"
 # ---------------------------------------------------------------------------
 # Columnas del UPSERT (orden = orden del INSERT)
 # Deben coincidir con sql/bronce_erp_ddl.sql (sin loaded_at: lo pone DEFAULT).
+# Son las columnas de las tablas erp_*.
+# Se harcodean las columnas porque son pocas y se conocen de antemano. Si no, con un sqlAlchemy se podría obtener automáticamente.
 # ---------------------------------------------------------------------------
 _CLIENTES_COLS = [
     "id_cliente", "codigo", "nombre", "apellido", "email", "telefono",
@@ -48,9 +50,9 @@ _VENTAS_COLS = [
     "sucursal", "vendedor_id", "estado", "created_at", "batch_id",
 ]
 
-
 def ensure_bronce_erp_ddl() -> None:
-    """Aplica el DDL de landing ERP si las tablas no existen todavía."""
+    """Aplica el DDL de landing ERP si las tablas no existen todavía.
+       DDL: Data Definition Language: el SQL que define la estructura de la base"""
     sql = DDL_PATH.read_text(encoding="utf-8")
     conn = connect(rds_etl_conn())
     try:
@@ -61,7 +63,7 @@ def ensure_bronce_erp_ddl() -> None:
     finally:
         conn.close()
 
-
+#UPSERT de una tabla bronce.erp_*.
 def _upsert(conn, table: str, cols: list[str], rows: list[dict[str, Any]], pk: str) -> int:
     """INSERT … ON CONFLICT (pk) DO UPDATE para una tabla bronce.erp_*.
 
@@ -83,16 +85,18 @@ def _upsert(conn, table: str, cols: list[str], rows: list[dict[str, Any]], pk: s
         cur.executemany(sql, values)
     return len(values)
 
-
+#UPSERT de clientes/productos/ventas + registro en `ingest_batch`.
+#Deprecated: usar `load_erp_to_bronce` en su lugar.
 def load_to_cruda(records: list[dict[str, Any]], origen: str) -> int:
     """Compat API vieja (payload genérico). Preferir `load_erp_to_bronce`."""
     print(
+        #Imprime el origen y el número de filas.
         f"[load->cruda] API legacy origen={origen} filas={len(records)} "
         "(usar load_erp_to_bronce)"
     )
     return len(records)
 
-
+#UPSERT de clientes/productos/ventas + registro en `ingest_batch`.
 def load_erp_to_bronce(
     tables: dict[str, list[dict[str, Any]]],
     origen: str = "erp",
@@ -105,9 +109,12 @@ def load_erp_to_bronce(
       3) estampa batch_id en cada fila
       4) UPSERT de las tres tablas
     """
+    #Aplica el DDL de landing ERP si las tablas no existen todavía.
     ensure_bronce_erp_ddl()
+    #Conecta a la base de datos.
     conn = connect(rds_etl_conn())
     total = 0
+    #Inserta una fila en ingest_batch y obtiene el batch_id.
     try:
         with conn.cursor() as cur:
             n = sum(len(tables.get(k, [])) for k in ("clientes", "productos", "ventas"))

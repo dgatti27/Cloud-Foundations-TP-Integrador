@@ -2,7 +2,7 @@
 
 Contexto
 --------
-Después del DAG grupo 1, el landing vive en:
+Después del DAG grupo 1, el landing (primera copia de los datos desde origen dentro del DW) vive en:
   bronce.erp_clientes / erp_productos / erp_ventas
 
 Este módulo las relee para alimentar `transform.to_gold`.
@@ -22,6 +22,7 @@ from pipeline.db import connect, fetch_dicts
 
 # ---------------------------------------------------------------------------
 # Tablas landing (DDL en sql/bronce_erp_ddl.sql)
+# Se harcodean las tablas porque son pocas y se conocen de antemano. Si no, con un sqlAlchemy se podría obtener automáticamente.
 # ---------------------------------------------------------------------------
 BRONCE_TABLES = {
     "clientes": "SELECT * FROM bronce.erp_clientes ORDER BY id_cliente",
@@ -29,7 +30,7 @@ BRONCE_TABLES = {
     "ventas": "SELECT * FROM bronce.erp_ventas ORDER BY id_venta",
 }
 
-
+#Extrae una tabla de bronce.erp_* como lista de dicts.
 def extract_bronce(tabla: str = "ventas", **_) -> list[dict[str, Any]]:
     """Lee UNA tabla de bronce.erp_* como lista de dicts."""
     key = tabla.lower().strip()
@@ -44,7 +45,7 @@ def extract_bronce(tabla: str = "ventas", **_) -> list[dict[str, Any]]:
     finally:
         conn.close()
 
-
+#Agrupa las tres tablas en un solo dict y guarda en memoria y las recibe el DAG
 def extract_bronce_all(**_) -> dict[str, list[dict[str, Any]]]:
     """Extrae las tres tablas bronce (entrada de `transform_to_gold`)."""
     return {name: extract_bronce(name) for name in BRONCE_TABLES}

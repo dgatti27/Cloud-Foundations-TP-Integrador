@@ -1,8 +1,5 @@
 """Helpers de conexión PostgreSQL (psycopg2) compartidos por extract/load.
 
-Por qué existe
---------------
-`config.py` solo *resuelve* credenciales (dict o DSN).
 Este módulo *abre* la conexión y ejecuta lecturas tipadas.
 
 Usado por:

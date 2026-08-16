@@ -26,9 +26,11 @@ jobs:
       - name: Instalar herramientas
         run: python -m pip install --upgrade pip ruff
       - name: Instalar dependencias ETL
-        run: pip install -r apps/pipeline/requirements.txt
+        run: pip install -r apps/pipeline/requirements-dev.txt
       - name: Lint (ruff, errores reales)
         run: ruff check --select E9,F63,F7,F82 apps/pipeline apps/airflow/dags apps/api
+      - name: Lint (flake8 pipeline)
+        run: flake8 --config apps/pipeline/.flake8 apps/pipeline
       - name: Compilar (py_compile)
         run: |
           set -euo pipefail
@@ -37,6 +39,8 @@ jobs:
           mapfile -t api_py < <(git ls-files 'apps/api/*.py')
           python -m py_compile "${etl_py[@]}" "${dag_py[@]}" "${api_py[@]}"
           echo "py_compile OK (${#etl_py[@]} etl + ${#dag_py[@]} dags + ${#api_py[@]} api)"
+      - name: Pytest (pipeline, mock / sin DB)
+        run: pytest -c apps/pipeline/pytest.ini --rootdir=apps/pipeline
       - name: Import + smoke (sin DB)
         env:
           PYTHONPATH: apps

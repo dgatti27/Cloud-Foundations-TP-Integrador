@@ -27,21 +27,20 @@ from typing import Any
 # ---------------------------------------------------------------------------
 def _sm_client():
     """Construye el client de Secrets Manager apuntando a MiniStack o AWS.
-
-    - Si existe `SECRETS_ENDPOINT`, usa ese URL (Hobby / LocalStack-like).
     - Credenciales `test`/`test` son las del emulador local del TP.
     """
     import boto3
-
+    
+    #Obtiene el endpoint de Secrets Manager desde las variables de entorno.
     endpoint = os.environ.get("SECRETS_ENDPOINT")
-    kwargs: dict[str, Any] = {
+    args: dict[str, Any] = {
         "region_name": os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
         "aws_access_key_id": os.environ.get("AWS_ACCESS_KEY_ID", "test"),
         "aws_secret_access_key": os.environ.get("AWS_SECRET_ACCESS_KEY", "test"),
     }
     if endpoint:
-        kwargs["endpoint_url"] = endpoint
-    return boto3.client("secretsmanager", **kwargs)
+        args["endpoint_url"] = endpoint
+    return boto3.client("secretsmanager", **args)
 
 
 def from_secrets(secret_name: str) -> dict:

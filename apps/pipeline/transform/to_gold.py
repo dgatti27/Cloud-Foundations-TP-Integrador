@@ -41,34 +41,37 @@ def _d(v) -> date | None:
     return date.fromisoformat(str(v)[:10])
 
 
+#Convierte una fecha a un entero de 8 dígitos en formato YYYYMMDD.
 def _fecha_sk(d: date) -> int:
     """SK de fecha tipo YYYYMMDD (ej. 20240601)."""
     return int(d.strftime("%Y%m%d"))
 
-
+#Genera un hash de los atributos de negocio para detectar cambios (SCD-like).
 def _hash_diff(*parts: Any) -> str:
     """Hash de atributos de negocio para detectar cambios (SCD-like)."""
     blob = "|".join("" if p is None else str(p) for p in parts)
     return hashlib.md5(blob.encode("utf-8")).hexdigest()
 
 
+#Arma el bundle completo listo para UPSERT en `gold.*`.
 def transform_to_gold(
     clientes: list[dict[str, Any]],
     productos: list[dict[str, Any]],
     ventas: list[dict[str, Any]],
 ) -> dict[str, list[dict[str, Any]]]:
-    """Arma el bundle completo listo para UPSERT en `gold.*`.
-
+    """
     Retorno: dict con claves
       dim_fecha, dim_canal, dim_metodo_pago, dim_moneda,
       dim_cliente, dim_producto, fact_venta_linea
     """
     hoy = date.today()
-
+    #Itera sobre cada fila de la tabla clientes.    
     # ----- dim_cliente ------------------------------------------------------
     dim_cliente = []
     for c in clientes:
+        #Obtiene el código del cliente o el id_cliente como string.
         bk = c.get("codigo") or str(c["id_cliente"])
+        #Agrega una fila a la lista dim_cliente.
         dim_cliente.append(
             {
                 "cliente_sk": int(c["id_cliente"]),
@@ -120,14 +123,17 @@ def transform_to_gold(
     canal_i = pago_i = moneda_i = 1
 
     # ----- fact_venta_linea -------------------------------------------------
+    #Inicializa una lista vacía para almacenar las filas del fact_venta_linea.
     fact = []
     for v in ventas:
         fd = _d(v["fecha_venta"])
+        #Convierte la fecha a un entero de 8 dígitos en formato YYYYMMDD.
         assert fd is not None
         fsk = _fecha_sk(fd)
-
+        #Agrega una fila a la lista dim_fecha.  
         # dim_fecha: una fila por fecha distinta presente en ventas
         if fsk not in fechas:
+            #Agrega una fila a la lista dim_fecha.
             fechas[fsk] = {
                 "fecha_sk": fsk,
                 "fecha": fd,
@@ -141,9 +147,10 @@ def transform_to_gold(
                 "es_finde": fd.weekday() >= 5,
                 "es_feriado": False,
             }
-
+        #Obtiene el canal o "desconocido" como string en minúsculas.
         canal = (v.get("canal") or "desconocido").lower()
         if canal not in canales:
+            #Agrega una fila a la lista dim_canal.
             canales[canal] = {
                 "canal_sk": canal_i,
                 "canal_bk": canal[:40],
@@ -151,9 +158,10 @@ def transform_to_gold(
                 "tipo": canal,
             }
             canal_i += 1
-
+        #Obtiene el método de pago o "desconocido" como string en minúsculas.
         pago = (v.get("metodo_pago") or "desconocido").lower()
         if pago not in pagos:
+            #Agrega una fila a la lista dim_metodo_pago.
             pagos[pago] = {
                 "metodo_pago_sk": pago_i,
                 "tipo": pago,
@@ -161,9 +169,10 @@ def transform_to_gold(
                 "cuotas": 1 if pago == "tarjeta" else None,
             }
             pago_i += 1
-
+        #Obtiene la moneda o "ARS" como string en mayúsculas.
         mon = (v.get("moneda") or "ARS").upper()
         if mon not in monedas:
+            #Agrega una fila a la lista dim_moneda.
             monedas[mon] = {
                 "moneda_sk": moneda_i,
                 "iso": mon[:3],
@@ -171,9 +180,11 @@ def transform_to_gold(
                 "tipo_cambio_ref": 1.0,
             }
             moneda_i += 1
-
+        #Obtiene el importe bruto o 0 como float.
         bruto = float(v.get("importe_bruto") or 0)
+        #Obtiene el costo o 0 como float.
         costo = float(v.get("costo") or 0)
+        #Agrega una fila a la lista fact_venta_linea.
         fact.append(
             {
                 "venta_sk": int(v["id_venta"]),
@@ -198,6 +209,7 @@ def transform_to_gold(
             }
         )
 
+    #Crea un diccionario con las filas de las tablas dim_fecha, dim_canal, dim_metodo_pago, dim_moneda, dim_cliente, dim_producto y fact_venta_linea.
     out = {
         "dim_fecha": list(fechas.values()),
         "dim_canal": list(canales.values()),
@@ -207,6 +219,7 @@ def transform_to_gold(
         "dim_producto": dim_producto,
         "fact_venta_linea": fact,
     }
+    #Imprime el número de filas de cada tabla.
     print(
         "[transform to_gold] "
         + ", ".join(f"{k}={len(v)}" for k, v in out.items())

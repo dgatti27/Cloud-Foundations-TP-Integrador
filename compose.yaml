@@ -30,6 +30,9 @@ x-airflow-env: &airflow_env
   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres-dw:5432/gold
   AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
   PYTHONPATH: /opt/airflow/packages
+
+#Variables de entorno del bloque x-airflow-env (webserver, scheduler e init).
+#Sirven para que los DAGs / pipeline hablen con MiniStack y la RDS desde dentro de Docker.
   AWS_ACCESS_KEY_ID: test
   AWS_SECRET_ACCESS_KEY: test
   AWS_DEFAULT_REGION: us-east-1
@@ -39,6 +42,8 @@ x-airflow-env: &airflow_env
   RDS_ETL_SECRET: dw/rds-etl
   ORIGEN_SECRET: dw/origen-demo
   ERP_SECRET: dw/erp
+#En corto: las tres AWS_* autentican el SDK contra el emulador; SECRETS_ENDPOINT apunta a MiniStack;
+#los RDS_*_OVERRIDE corrigen cómo Airflow llega a la base; los *_SECRET nombran qué secret leer.
 
 x-airflow-volumes: &airflow_volumes
   - ./apps/airflow/dags:/opt/airflow/dags
@@ -93,6 +98,7 @@ services:
     ports:
       - "${POSTGRES_ERP_PORT:-5434}:5432"
     volumes:
+      #Inicia postgresql e inserta la semilla como mock de información con origen en el ERP.
       - postgres-data-erp:/var/lib/postgresql/data
       - ./apps/pipeline/erp/seed_erp.sql:/docker-entrypoint-initdb.d/01_seed_erp.sql:ro
     healthcheck:
@@ -242,6 +248,12 @@ services:
 
   # ---------------------------------------------------------------------------
   # ALB stand-in ≈ entrada pública  (Hobby no tiene ELBv2)
+  #Emula el rol del ALB en el to-be
+  #Mediante un contenedor Compose (apps/api/alb_standin) que:
+    #Expone HTTP en :8088 (entrada “pública” local).
+    #Recibe el request (p. ej. query gold).
+    #Invoca la Lambda tp-gold-api en LocalStack (:4566).
+    #Devuelve la respuesta al cliente (Postman/browser).
   # Postman → :8088 → Lambda en LocalStack
   # ---------------------------------------------------------------------------
   alb-standin:
@@ -305,6 +317,11 @@ services:
 
   # ---------------------------------------------------------------------------
   # Toolbox OpenTofu — NO arranca con up -d (profile iac)
+  # Es un contenedor de herramientas para aplicar el IaC del TP sin instalar OpenTofu en Windows.
+    #OpenTofu (tofu) — aplica infra/
+    #AWS CLI, Python, deps del repo
+    #Docker CLI + socket — scripts post-apply (p. ej. seed RDS vía docker exec)
+    #Monta infra/, apps/, data/ y apunta endpoints a LocalStack / MiniStack / MinIO.
   # ---------------------------------------------------------------------------
   tp-iac:
     profiles: ["iac"]

@@ -1,0 +1,30 @@
+# flake8 — paquete apps/pipeline
+# Uso: flake8 --config apps/pipeline/.flake8 apps/pipeline
+#      (o desde apps/pipeline: flake8 .)
+
+[flake8]
+max-line-length = 120
+exclude =
+    .git,
+    __pycache__,
+    build,
+    dist,
+    .venv,
+    venv,
+    tests,
+    coverage_html_report
+ignore = E203, W503, E266, F403, F401, E501, E265, E302, W291, W293
+max-complexity = 12
+count = True
+statistics = True
+show-source = True
+
+# E203 → Espaciado antes de ':' (conflicto con Black)
+# W503 → Line break before binary operator (conflicto con Black)
+# E266 → Demasiados '#' al inicio de comentario de bloque
+# F403 → Import * usado intencionalmente
+# F401 → Import no usado (en algunos __init__)
+# E501 → Línea demasiado larga (flexibilizado por legibilidad ETL)
+# E265 → Comentario de bloque sin espacio tras '#'
+# E302 → 2 líneas en blanco entre top-level (comentarios entre defs en ETL)
+# W291/W293 → trailing / blank whitespace en comentarios

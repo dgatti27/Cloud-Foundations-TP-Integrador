@@ -1,0 +1,4 @@
+# Dev / CI del paquete pipeline
+-r requirements.txt
+pytest>=7.4
+flake8>=6.1

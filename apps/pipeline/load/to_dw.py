@@ -1,6 +1,6 @@
-"""Grupo 2 — carga dimensional en schema `gold` (modelo TP).
+"""Grupo 2 — carga dimensional en schema `gold`.
 
-Escribe (en orden de `_SPECS`)
+Escribe (en orden de `_SPECS` (es la lista de tablas gold a cargar y cómo cargarlas. Cada elemento es una tupla))
 --------------------------------
   gold.dim_fecha / dim_canal / dim_metodo_pago / dim_moneda
   gold.dim_cliente / dim_producto
@@ -23,6 +23,8 @@ from pipeline.db import connect
 # ---------------------------------------------------------------------------
 # Especificación de carga: (tabla, primary key, columnas)
 # Orden: dims de apoyo → maestros → fact (respeta FKs lógicas).
+# Las tablas gold las crea el seed RDS (`data/rds/seed_tp.sql`).
+# Harcodeadas porque son pocas y se conocen de antemano. Si no, con un sqlAlchemy se podría obtener automáticamente.
 # ---------------------------------------------------------------------------
 _SPECS: list[tuple[str, str, list[str]]] = [
     ("gold.dim_fecha", "fecha_sk", [
@@ -58,6 +60,7 @@ _SPECS: list[tuple[str, str, list[str]]] = [
 ]
 
 
+#UPSERT de una tabla gold.*.
 def _upsert(conn, table: str, pk: str, cols: list[str], rows: list[dict[str, Any]]) -> int:
     """INSERT … ON CONFLICT (pk) DO UPDATE sobre una tabla gold.*."""
     if not rows:
@@ -75,22 +78,24 @@ def _upsert(conn, table: str, pk: str, cols: list[str], rows: list[dict[str, Any
         cur.executemany(sql, values)
     return len(values)
 
-
+#Compat: sin datos en memoria — no-op con mensaje.
 def load_to_dw() -> int:
     """Compat: sin datos en memoria — no-op con mensaje."""
     print("[load->dw] usá load_gold_bundle(transformed) desde el DAG grupo 2")
     return 0
 
-
+#UPSERT de todas las piezas del dict que devolvió `transform_to_gold`.
 def load_gold_bundle(bundle: dict[str, list[dict[str, Any]]]) -> int:
     """UPSERT de todas las piezas del dict que devolvió `transform_to_gold`.
 
     `bundle` usa claves cortas (`dim_fecha`, …);
     `_SPECS` usa nombres calificados `gold.dim_fecha` → se mapean en `key_map`.
     """
+    #Conecta a la base de datos.
     conn = connect(rds_etl_conn())
     total = 0
     try:
+        #Mapeo de nombres de tablas.
         key_map = {
             "gold.dim_fecha": "dim_fecha",
             "gold.dim_canal": "dim_canal",
@@ -100,12 +105,18 @@ def load_gold_bundle(bundle: dict[str, list[dict[str, Any]]]) -> int:
             "gold.dim_producto": "dim_producto",
             "gold.fact_venta_linea": "fact_venta_linea",
         }
+        #Itera sobre cada tabla en _SPECS.
         for table, pk, cols in _SPECS:
+            #Obtiene las filas de la tabla.
             rows = bundle.get(key_map[table], [])
+            #UPSERT de la tabla.
             n = _upsert(conn, table, pk, cols, rows)
+            #Suma el número de filas upsertadas.
             total += n
             print(f"  [load->gold] {table}: {n}")
+        #Confirma la transacción.
         conn.commit()
+        #Imprime el total de upserts.
         print(f"[load->gold] total upserts={total}")
         return total
     finally:

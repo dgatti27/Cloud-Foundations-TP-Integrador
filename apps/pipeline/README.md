@@ -8,7 +8,7 @@ Esquemas generales del TP: [README raíz — Datos](../../README.md#datos-esquem
 
 ## Flujo completo: PostgreSQL ERP → gold
 
-Camino B del TP. Dos DAGs en serie; cada uno llama funciones de este paquete.
+Dos DAGs en serie; cada uno llama funciones de este paquete.
 
 ```text
 postgres-erp                    RDS MiniStack (db dw)
@@ -37,7 +37,7 @@ Con el stack levantado (`docker compose up -d`) + IaC (`tofu apply`) alcanza:
 
 | Paso | Qué | Dónde |
 |---|---|---|
-| 0a | Semilla del origen (`Clientes` / `Productos` / `Ventas`) | Compose monta `erp/seed_erp.sql` en `postgres-erp` (`initdb`) |
+| 0a | Semilla del origen (Simula los datos origen del ERP) (`Clientes` / `Productos` / `Ventas`) | Compose monta `erp/seed_erp.sql` en `postgres-erp` (`initdb`) |
 | 0b | Secret `dw/erp` con host `postgres-erp` | OpenTofu → módulo `infra/modules/secrets` |
 | 0c | Secret `dw/rds-etl` (`etl_writer`) + schemas bronce/gold | IaC + `data/rds/seed_tp.sql` |
 | 0d | Airflow con `PYTHONPATH` → paquete `pipeline` | Compose monta `./apps/pipeline` |
@@ -63,7 +63,7 @@ Origen: Postgres ERP → landing en `bronce.erp_*`.
 |---|---|---|---|
 | 1 | `ensure_bronce_ddl` | `load.to_cruda.ensure_bronce_erp_ddl` | Aplica `sql/bronce_erp_ddl.sql` (`CREATE TABLE IF NOT EXISTS` de `ingest_batch` + `erp_*`). Credencial: `dw/rds-etl`. |
 | 2 | `extract_erp` | `extract.erp_foxpro.extract_erp_all` | Abre `dw/erp`, hace `SELECT *` de `"Clientes"`, `"Productos"`, `"Ventas"`. Devuelve un dict `{clientes, productos, ventas}` en memoria. El DAG lo guarda en XCom (`erp_raw`). |
-| 3 | `transform_normalize` | `transform.normalize.normalize_erp_bundle` | Limpieza ligera: `strip` en strings, metadatos `_tabla` / `_origen`. **No** modela el DW todavía. XCom: `erp_clean`. |
+| 3 | `transform_normalize` | `transform.normalize.normalize_erp_bundle` | Limpieza ligera (Transformación simbólica): `strip` en strings, metadatos `_tabla` / `_origen`. **No** modela el DW todavía. XCom: `erp_clean`. |
 | 4 | `load_bronce` | `load.to_cruda.load_erp_to_bronce` | Inserta fila en `bronce.ingest_batch` → obtiene `batch_id` → UPSERT a `bronce.erp_clientes`, `erp_productos`, `erp_ventas` (`ON CONFLICT` por PK). |
 
 **Resultado del grupo 1:** datos del ERP copiados de forma columnar en el schema `bronce` de la RDS, con trazabilidad por `batch_id`.
@@ -118,3 +118,13 @@ Credenciales usadas en el camino:
 | [`sql/bronce_erp_ddl.sql`](./sql/bronce_erp_ddl.sql) | DDL de las tablas landing |
 
 Los comentarios detallados por sección están **dentro de cada archivo**.
+
+## Tests y lint
+
+```powershell
+pip install -r apps/pipeline/requirements-dev.txt
+flake8 --config apps/pipeline/.flake8 apps/pipeline
+pytest -c apps/pipeline/pytest.ini --rootdir=apps/pipeline
+```
+
+Config: [`.flake8`](./.flake8) · [`pytest.ini`](./pytest.ini) · [`setup.cfg`](./setup.cfg) (coverage).
