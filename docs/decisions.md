@@ -23,9 +23,10 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 - (+) Costo AWS del entorno local ≈ **USD 0**; el to-be se **estima** (FinOps) en **275,78 USD/mes** OD.  
 - (+) Reproduce IAM, VPC, S3, RDS, Secrets, Lambda, logs.  
 - (−) Hobby **no** trae ECS, EFS, ELBv2 ni Budgets → hay que *stand-inear* (decisión 003).  
-- (−) Tres backends (4566 / 4567 / 9000): hay que no mezclar endpoints.
+- (−) Tres backends (4566 / 4567 / 9000): hay que no mezclar endpoints.  
+- (−) En Windows/OneDrive, `tofu` en el host a veces falla al cargar providers → conviene la imagen toolbox `tp-integrador-iac` (perfil Compose `iac`).
 
-**Resultado:** `docker compose up -d` + `cd infra && tofu apply`. Budget AWS solo cuando `create_budget=true` en cuenta real. Estimación siempre local (`python labs/finops/pricing.py`).
+**Resultado:** `docker compose up -d` + `cd infra && tofu apply` (o `docker compose --profile iac run --rm tp-iac apply`). Budget AWS solo cuando `create_budget=true` en cuenta real. Estimación siempre local (`python labs/finops/pricing.py`). Bajar limpio: decisión 011.
 
 ---
 
@@ -77,7 +78,7 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 - (−) ALB stand-in no es ELB (ni WAF ni TLS terminado en AWS).  
 - (−) FinOps no crea `aws_budgets_budget` hasta AWS real.
 
-**Resultado:** `ecs_mode = hobby-standin`. `apps/airflow/` ≈ EFS. IaC solo en `infra/`. `create_budget=false` por defecto.
+**Resultado:** `ecs_mode = hobby-standin`. `apps/airflow/` ≈ EFS. IaC solo en `infra/`. `create_budget=false` por defecto. Orquestación ETL: UI Airflow o atajo opcional `labs/ecs/ecs.py --skip-infra --erp`.
 
 ---
 
@@ -99,7 +100,7 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 - (+) Policies y comentarios viven en los módulos.  
 - (−) Demos Python (`ecs.py`, etc.) usan `--skip-infra` si el apply ya corrió.
 
-**Resultado:** única fuente IaC: `cd infra && tofu apply`.
+**Resultado:** única fuente IaC: `cd infra && tofu apply` (o toolbox `tp-iac`).
 
 ---
 
@@ -121,29 +122,30 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 - (+) Alertas 80/100 cuando importen (cuenta AWS real).  
 - (−) El inventario Hobby (`finops_inventory.json`) no es un control de gasto real.
 
-**Resultado:** baseline **275,78 OD / 262,26 SP** → entra en 300 (92% / 87%). Detalle en [`finops.md`](finops.md). Gateway VPCE S3 ya en el diseño (0 USD); NAT se mantiene para orígenes on-host.
+**Resultado:** baseline **275,78 OD / 262,26 SP** → entra en 300 (92% / 87%). Detalle en [`finops.md`](finops.md). Gateway VPCE S3 ya en el diseño (0 USD); NAT se mantiene para orígenes on-host. Inventario IaC: `infra/generated/finops_inventory.json` con `filename` bajo `path.root` (evita replace cosmético por `modules/finops/../../…` entre apply/plan).
 
 ---
 
 ### 006 — Zip Lambda con `pg8000` vendorizado (sin pip en el apply)
 
-**Decision:** el zip de `tp-gold-api` incluye `handler.py`, `query_gold.py` y `apps/api/vendor/` (`pg8000` + `scramp` **commiteados**). No se corre `pip` en cada `tofu plan`/`apply`.
+**Decision:** el zip de `tp-gold-api` incluye `handler.py`, `query_gold.py` y `apps/api/vendor/` (`pg8000` + deps transitivas **commiteadas**). No se corre `pip` en cada `tofu plan`/`apply`.
 
 **Contexto:** incluir el driver vía `pip` en `local-exec` rompía idempotencia (hash del zip / mtimes) y alargaba el apply en Windows. El zip lite sin driver devolvía `500 No module named 'pg8000'` en `GET /gold/query`.
 
 **Alternativas:**
 
 1. `pip` + layer/zip en cada apply.  
-2. **Vendor `pg8000`+`scramp` en `apps/api/vendor/`** (elegida).  
+2. **Vendor `pg8000` (+ deps) en `apps/api/vendor/`** (elegida).  
 3. Zip lite sin driver (rechazada: bloquea consultas gold).
 
 **Tradeoff:**
 
 - (+) Apply Hobby estable e idempotente.  
 - (+) `GET /gold/query` puede hablar con RDS (`api_reader`).  
-- (−) Vendor ocupa espacio en el repo; hay que actualizarlo a mano si sube la versión.
+- (−) Vendor ocupa espacio en el repo; hay que actualizarlo a mano si sube la versión.  
+- (−) CI/lint no debe escanear `vendor/` (ruido F821 en libs de terceros).
 
-**Resultado:** `infra/modules/lambda` zippea `source_dir` de `apps/api` (excluye `alb_standin`). Rebuild: `pip install -r apps/api/requirements.txt -t apps/api/vendor`.
+**Resultado:** `infra/modules/lambda` zippea `source_dir` de `apps/api` (excluye `alb_standin`). Rebuild: `pip install -r apps/api/requirements.txt -t apps/api/vendor`. Ruff en GitHub Actions usa `--exclude apps/api/vendor`.
 
 ---
 
@@ -171,23 +173,25 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 
 ### 008 — RDS MiniStack + puerto host dinámico
 
-**Decision:** Postgres “RDS” del TP es **MiniStack** (`:4567` API, container `ministack-rds-*-tp-dw-db`). El puerto **publicado en el host** no está fijo en 15432: MiniStack puede usar 15434, etc.
+**Decision:** Postgres “RDS” del TP es **MiniStack** (`:4567` API, container `ministack-rds-*-tp-dw-db`). El puerto **publicado en el host** no está fijo en 15432: MiniStack puede usar 15433 / 15434, etc.
 
-**Contexto:** Lambda/pgAdmin en el host usan `host.docker.internal` + `rds_port_override` (default 15432). El secret guarda el IP interno Docker `:5432`.
+**Contexto:** Airflow (Compose), Lambda y pgAdmin en el host usan `host.docker.internal` + puerto override. El secret guarda el IP interno Docker `:5432`. Si el override queda en 15432 y MiniStack publicó otro, DAGs/API fallan al conectar.
 
 **Alternativas:**
 
 1. Forzar siempre `-p 15432:5432` (MiniStack no lo garantiza).  
 2. Descubrir el puerto en cada apply (frágil en plan).  
-3. **Default 15432 + override explícito** `TF_VAR_rds_port_override` / `terraform.tfvars` (elegida).
+3. **Default 15432 + override explícito** en dos capas (elegida):  
+   - IaC / Lambda: `rds_port_override` (`TF_VAR_…` / `infra/terraform.tfvars`)  
+   - Runtime Airflow: `RDS_PORT_OVERRIDE` en `.env` → `compose.yaml`
 
 **Tradeoff:**
 
 - (+) Seed `post_rds.py` usa `docker exec` (no depende del puerto host).  
-- (−) pgAdmin `servers.json` y el env de Lambda pueden quedar desfasados si MiniStack eligió otro puerto.  
+- (−) Hay que alinear `.env` + `terraform.tfvars` tras recrear la RDS.  
 - No bloquea el apply ni el health de ALB.
 
-**Resultado:** chequear con `docker ps --filter name=ministack-rds`. No es crítico para el funcionamiento del IaC; sí para SQL desde el host / query gold cuando exista `pg8000`.
+**Resultado:** chequear con `docker ps --filter name=ministack-rds`. README §6.4 / troubleshooting. Query gold OK con vendor `pg8000` (decisión 006) cuando el puerto coincide.
 
 ---
 
@@ -207,7 +211,7 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 
 ### 010 — Gold acotado al TP (6 dims + 2 facts)
 
-**Decision:** schema `gold` con **6 dimensiones** y **2 hechos**, no un Modelo_DW de 19 tablas.
+**Decision:** schema `gold` con **6 dimensiones** y **2 hechos**, no un Modelo_DW de 19 tablas. Paquete ETL en **`apps/pipeline/`** (no `apps/etl`).
 
 **Contexto:** el entregable demuestra ERP → bronce → gold → API. Un modelo completo diluye el TP.
 
@@ -216,4 +220,26 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 - Facts: `fact_venta_linea` (carga el ETL), `fact_venta_devolucion` (creada, carga opcional)
 - Geo y categoría embebidas en cliente/producto
 
-**Resultado:** `data/rds/seed_tp.sql` + `apps/pipeline/transform/to_gold.py` + allowlist en `apps/api/query_gold.py`.
+**Resultado:** `data/rds/seed_tp.sql` + `apps/pipeline/transform/to_gold.py` + allowlist en `apps/api/query_gold.py`. Tests: `pytest` bajo `apps/pipeline/tests/` (mock, sin DB).
+
+---
+
+### 011 — Cleanup Hobby: destroy IaC + wipe de volúmenes
+
+**Decision:** bajar el entorno local con **`scripts/cleanup-hobby(.ps1|.sh)`** (o equivalente manual), no solo `tofu destroy`. Secrets Hobby con **`recovery_window_in_days = 0`**.
+
+**Contexto:** `tofu destroy` limpia state/API, pero persisten volúmenes Docker (`localstack-data`, `ministack-data`, `minio-data`, `ministack-rds-*-data`). Eso generaba ghosts: secrets soft-deleted (`ResourceExistsException` con lista vacía), IAM/S3 huérfanos y schema RDS viejo (p. ej. falta `pais` en `dim_cliente`).
+
+**Alternativas:**
+
+1. Solo `tofu destroy` + `compose down` (insuficiente).  
+2. `compose down -v` a ciegas (borra también ERP/Airflow DB sin destroy ordenado).  
+3. **Script de cleanup (destroy + sidecars RDS + wipe emuladores)** + soft-delete inmediato de secrets (elegida).
+
+**Tradeoff:**
+
+- (+) Próximo `compose up` + `tofu apply` parte limpio.  
+- (+) `-Full` / `--full` opcional para resetear también postgres/redis/pgAdmin.  
+- (−) Es **manual** (no se dispara solo al destroy); documentado en README §9.
+
+**Resultado:** [`scripts/cleanup-hobby.ps1`](../scripts/cleanup-hobby.ps1) / [`.sh`](../scripts/cleanup-hobby.sh); secrets en `infra/modules/secrets`. Arranque limpio: Compose → apply → DAGs → Postman.
