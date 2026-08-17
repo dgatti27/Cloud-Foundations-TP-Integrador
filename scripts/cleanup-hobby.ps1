@@ -36,6 +36,16 @@ function Write-Step([string]$msg) { Write-Host ""; Write-Host "==> $msg" -Foregr
 function Write-Ok([string]$msg) { Write-Host "  OK $msg" -ForegroundColor Green }
 function Write-Warn([string]$msg) { Write-Host "  ! $msg" -ForegroundColor Yellow }
 
+# Docker escribe progreso en stderr; en PS 5.1 eso dispara RemoteException con Stop.
+function Invoke-Docker([string[]]$Args) {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & docker @Args 2>&1 | ForEach-Object { Write-Host $_ }
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    return $code
+}
+
 if (-not $Yes) {
     Write-Host ""
     Write-Host "Cleanup Hobby - esto va a:"
@@ -104,14 +114,18 @@ if (-not $SkipDestroy) {
 
 # --- 2) Compose down ---
 Write-Step "docker compose down"
-docker compose down --remove-orphans 2>&1 | Out-Host
-Write-Ok "compose down"
+$downCode = Invoke-Docker compose down --remove-orphans
+if ($downCode -eq 0) {
+    Write-Ok "compose down"
+} else {
+    Write-Warn "compose down exit $downCode (puede ser normal si ya estaba bajo)"
+}
 
 # --- 3) Sidecars RDS MiniStack ---
 Write-Step "contenedores ministack-rds-*"
 $rdsIds = @(docker ps -aq --filter "name=ministack-rds" 2>$null | Where-Object { $_ })
 if ($rdsIds.Count -gt 0) {
-    docker rm -f @($rdsIds) 2>&1 | Out-Host
+    $null = Invoke-Docker @("rm", "-f") + @($rdsIds)
     Write-Ok ("eliminados: " + $rdsIds.Count)
 } else {
     Write-Ok "ninguno"
