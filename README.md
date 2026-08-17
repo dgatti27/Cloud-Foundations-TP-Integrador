@@ -447,7 +447,7 @@ Con pipeline (paso 6) → `dim_cliente` / `fact_venta_linea` con filas > 0.
 cd infra && tofu plan
 ```
 
-Esperado: **0 to add, 0 to destroy**. Puede haber 4 `update in-place` cosméticos en descriptions de SG (LocalStack Hobby); no recrea VPC/IAM/RDS/Lambda.
+Esperado: **0 to add, 0 to destroy**. Puede haber `update in-place` cosméticos en descriptions de SG (LocalStack Hobby); no recrea VPC/IAM/RDS/Lambda. El inventario FinOps (`local_file.finops_inventory`) queda estable tras apply (ruta `generated/` + content tipado).
 
 ## 6. Ejecutar el pipeline (ERP → bronce → gold)
 
@@ -573,15 +573,30 @@ http://localhost:8088/gold/query?table=dim_cliente&condition=pais=Argentina&limi
 ```
 
 Allowlist: `dim_fecha`, `dim_cliente`, `dim_producto`, `dim_canal`, `dim_metodo_pago`, `dim_moneda`, `fact_venta_linea`, `fact_venta_devolucion`.
-### 7.3 curl / PowerShell
+
+### 7.3 curl / PowerShell (pruebas validadas)
+
+Mismas llamadas que en Postman; útiles para smoke rápido tras el paso 6:
 
 ```bash
+curl -s http://localhost:8088/health
+
 curl -s "http://localhost:8088/gold/query?table=dim_cliente&limit=20"
+
 curl -s "http://localhost:8088/gold/query?table=fact_venta_linea&limit=10"
+
+curl -s "http://localhost:8088/gold/query?table=dim_producto&limit=10"
 ```
 
+Esperado: health con `"ok":true`; queries con `"ok":true` y `row_count` > 0.
+
+PowerShell:
+
 ```powershell
+Invoke-RestMethod http://localhost:8088/health
 Invoke-RestMethod "http://localhost:8088/gold/query?table=dim_cliente&limit=20"
+Invoke-RestMethod "http://localhost:8088/gold/query?table=fact_venta_linea&limit=10"
+Invoke-RestMethod "http://localhost:8088/gold/query?table=dim_producto&limit=10"
 ```
 
 Invoke directo a LocalStack (sin ALB):

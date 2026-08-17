@@ -36,6 +36,27 @@ locals {
   budget_file   = jsondecode(file("${path.module}/budget.json"))
   budget_name   = local.budget_file["BudgetName"]
   budget_amount = local.budget_file["BudgetLimit"]["Amount"]
+
+  # Inventario tipado (hash estable) — local_file fuerza replace si cambia content.
+  finops_inventory = {
+    create_budget    = var.create_budget
+    budget_name      = local.budget_name
+    budget_limit_usd = tostring(local.budget_amount)
+    notify_email     = var.notify_email
+    alerts = [
+      { type = "ACTUAL", threshold = var.actual_threshold_pct },
+      { type = "FORECASTED", threshold = var.forecasted_threshold_pct },
+    ]
+    estimation = {
+      tool              = "python labs/finops/pricing.py"
+      services_baseline = "labs/finops/services.json"
+      workbook          = "labs/finops/estimate.md"
+      narrative         = "docs/finops.md"
+      decisions         = "docs/decisions.md"
+    }
+    notes = "Hobby: inventario local. Budget AWS solo si create_budget=true."
+    tags  = var.tags
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -50,28 +71,13 @@ check "notify_email_not_placeholder" {
 
 # ---------------------------------------------------------------------------
 # Inventario local (siempre) — evidencia FinOps en Hobby
+# filename bajo path.root (no modules/finops/../../…) para no drift por path.
 # ---------------------------------------------------------------------------
 resource "local_file" "finops_inventory" {
-  filename = "${path.module}/../../generated/finops_inventory.json"
-  content = jsonencode({
-    create_budget    = var.create_budget
-    budget_name      = local.budget_name
-    budget_limit_usd = local.budget_amount
-    notify_email     = var.notify_email
-    alerts = [
-      { type = "ACTUAL", threshold = var.actual_threshold_pct },
-      { type = "FORECASTED", threshold = var.forecasted_threshold_pct },
-    ]
-    estimation = {
-      tool               = "python labs/finops/pricing.py"
-      services_baseline  = "labs/finops/services.json"
-      workbook           = "labs/finops/estimate.md"
-      narrative          = "docs/finops.md"
-      decisions          = "docs/decisions.md"
-    }
-    notes = "Hobby: inventario local. Budget AWS solo si create_budget=true."
-    tags  = var.tags
-  })
+  filename             = "${path.root}/generated/finops_inventory.json"
+  content              = jsonencode(local.finops_inventory)
+  file_permission      = "0644"
+  directory_permission = "0755"
 }
 
 # ---------------------------------------------------------------------------
