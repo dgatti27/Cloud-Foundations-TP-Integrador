@@ -1,3 +1,4 @@
+# Outputs ECS — mode hobby-standin | aws-api (+ cluster/efs si aplica).
 output "mode" {
   value = var.enable_ecs_api ? "aws-api" : "hobby-standin"
 }

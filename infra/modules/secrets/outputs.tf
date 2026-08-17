@@ -1,3 +1,4 @@
+# Outputs Secrets — ARNs/nombres para IAM policies y tofu output.
 output "secret_arns" {
   value = {
     master      = aws_secretsmanager_secret.master.arn

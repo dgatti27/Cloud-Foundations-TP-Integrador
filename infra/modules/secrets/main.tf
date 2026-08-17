@@ -1,14 +1,21 @@
 # =============================================================================
 # Secrets Manager (MiniStack) — credenciales RDS + orígenes
-# -----------------------------------------------------------------------------
-# JSON shape = el que consumen ECS/Lambda (username, password, host, search_path).
-# Las passwords de roles Postgres (etl_writer / api_reader) se alinean en el
-# seed SQL (ALTER ROLE) del root module.
+# =============================================================================
+# Provider: aws.ministack (:4567 en host / :4566 en red Docker).
 #
-# Host en secrets: address MiniStack (red Docker). Apps Compose usan
-# RDS_HOST_OVERRIDE=host.docker.internal.
+# Cada secret = recurso `aws_secretsmanager_secret` + `…_version` (JSON).
+# El JSON lo leen: pipeline (ETL), Lambda query_gold, DAG de comprobación.
+#
+# Passwords de roles Postgres (etl_writer / api_reader) se alinean después
+# con ALTER ROLE en scripts/post_rds.py (null_resource.rds_seed del root).
+#
+# Host en el JSON = address MiniStack (red Docker). Desde Compose/Airflow
+# se overridea con RDS_HOST_OVERRIDE=host.docker.internal.
 # =============================================================================
 
+# ---------------------------------------------------------------------------
+# Variables de entrada (las arma infra/main.tf)
+# ---------------------------------------------------------------------------
 variable "tags" { type = map(string) }
 variable "db_name" { type = string }
 variable "db_port" { type = number }
@@ -45,6 +52,10 @@ variable "erp" {
   })
 }
 
+# ---------------------------------------------------------------------------
+# 1) dw/rds-master — usuario master de la instancia (bootstrap / admin)
+# Consumo: post_rds.py, ops. NO lo usan DAGs ni Lambda en runtime normal.
+# ---------------------------------------------------------------------------
 resource "aws_secretsmanager_secret" "master" {
   name        = "dw/rds-master"
   description = "Master de RDS tp-dw-db — solo bootstrap / admin"
@@ -63,6 +74,11 @@ resource "aws_secretsmanager_secret_version" "master" {
   })
 }
 
+# ---------------------------------------------------------------------------
+# 2) dw/rds-etl — etl_writer (escritura bronce + gold)
+# Consumo: pipeline.config.rds_etl_conn / DAGs grupo 1 y 2.
+# search_path orienta psql a bronce,gold.
+# ---------------------------------------------------------------------------
 resource "aws_secretsmanager_secret" "etl" {
   name        = "dw/rds-etl"
   description = "Credencial ETL (ECS): escritura bronce + lectura/escritura gold"
@@ -82,6 +98,10 @@ resource "aws_secretsmanager_secret_version" "etl" {
   })
 }
 
+# ---------------------------------------------------------------------------
+# 3) dw/rds-api — api_reader (SELECT solo gold)
+# Consumo: apps/api/query_gold.py (Lambda tp-gold-api).
+# ---------------------------------------------------------------------------
 resource "aws_secretsmanager_secret" "api" {
   name        = "dw/rds-api"
   description = "Credencial Lambda API: SELECT solo sobre schema gold"
@@ -101,6 +121,10 @@ resource "aws_secretsmanager_secret_version" "api" {
   })
 }
 
+# ---------------------------------------------------------------------------
+# 4) dw/origen-demo — camino A (etl_rds_comprobation)
+# Host típico: postgres-bronce en Compose.
+# ---------------------------------------------------------------------------
 resource "aws_secretsmanager_secret" "origen_demo" {
   name        = "dw/origen-demo"
   description = "Origen demo (postgres-bronce)"
@@ -119,6 +143,10 @@ resource "aws_secretsmanager_secret_version" "origen_demo" {
   })
 }
 
+# ---------------------------------------------------------------------------
+# 5) dw/erp — camino B (extract ERP → bronce)
+# Host: postgres-erp (red Docker). Consumo: pipeline.extract.erp_foxpro.
+# ---------------------------------------------------------------------------
 resource "aws_secretsmanager_secret" "erp" {
   name        = "dw/erp"
   description = "Origen ERP (postgres-erp)"

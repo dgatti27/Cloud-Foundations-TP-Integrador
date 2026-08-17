@@ -1,3 +1,4 @@
+# Outputs FinOps — nombre de budget, flag y path del inventario JSON.
 output "budget_name" {
   value = local.budget_name
 }

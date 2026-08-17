@@ -1,6 +1,6 @@
 # Labs (guías y demos)
 
-Material de apoyo del curso. **La infraestructura del producto se genera solo desde [`../infra`](../infra)** (`tofu apply`).
+JSONs de apoyo de la infraestructura del TP. **La infraestructura del TP se genera solo desde [`../infra`](../infra)** (`tofu apply`).
 
 | Tema | Carpeta | IaC en el TP |
 |------|---------|--------------|

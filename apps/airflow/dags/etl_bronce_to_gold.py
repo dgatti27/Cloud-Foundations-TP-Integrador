@@ -34,6 +34,7 @@ from airflow.operators.python import PythonOperator
 
 # ---------------------------------------------------------------------------
 # Tasks
+#Extrae las tres tablas en un solo dict y guarda en memoria y las recibe el DAG
 # ---------------------------------------------------------------------------
 def task_extract(**context):
     """Lee bronce.erp_clientes/productos/ventas → XCom `bronce_raw`.
@@ -56,7 +57,9 @@ def task_transform(**context):
     """
     from pipeline.transform.to_gold import transform_to_gold
 
+    #Deserializa los datos para que puedan ser procesados por transform_to_gold.
     raw = context["ti"].xcom_pull(key="bronce_raw", task_ids="extract_bronce") or {}
+    #Arma el bundle ( paquete de tablas en un solo dict en memoria) gold en memoria (dims + fact).
     bundle = transform_to_gold(
         clientes=raw.get("clientes", []),
         productos=raw.get("productos", []),

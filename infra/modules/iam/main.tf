@@ -171,8 +171,10 @@ resource "aws_iam_user_group_membership" "admin" {
 
 # ---------------------------------------------------------------------------
 # 6) Inline policies de runtime (TP)
-# Nombre InlineS3Read = policy inline de lectura S3 del task role.
+# Se adjuntan al role/grupo; viven en el state (no JSON externo).
 # ---------------------------------------------------------------------------
+
+# 6.a) app-role → lectura/escritura objetos del lake (task ETL)
 resource "aws_iam_role_policy" "app_s3" {
   name = "InlineS3Read"
   role = aws_iam_role.app.id
@@ -207,12 +209,14 @@ resource "aws_iam_role_policy" "app_s3" {
   })
 }
 
+# 6.b) db-role → misma policy S3 file-based (export RDS → lake)
 resource "aws_iam_role_policy" "db_s3" {
   name   = "InlineS3Read"
   role   = aws_iam_role.db.id
   policy = file("${local.policy_dir}/s3_readwrite_policy.json")
 }
 
+# 6.c) app-role → GetSecretValue orígenes + dw/rds-etl (+ PutMetricData)
 resource "aws_iam_role_policy" "app_etl_secrets" {
   name = "InlineEtlSecrets"
   role = aws_iam_role.app.id
@@ -242,6 +246,7 @@ resource "aws_iam_role_policy" "app_etl_secrets" {
   })
 }
 
+# 6.d) ecsTaskExecutionRole → logs + pull ECR (agente de boot, no el task)
 resource "aws_iam_role_policy" "ecs_execution" {
   name = "InlineEcsExecution"
   role = aws_iam_role.ecs_execution.id
@@ -269,6 +274,7 @@ resource "aws_iam_role_policy" "ecs_execution" {
   })
 }
 
+# 6.e) api-role → CloudWatch Logs + ENI (si attach_vpc) 
 resource "aws_iam_role_policy" "api_execution" {
   name = "InlineLambdaExecution"
   role = aws_iam_role.api.id
@@ -297,6 +303,7 @@ resource "aws_iam_role_policy" "api_execution" {
   })
 }
 
+# 6.f) api-role → solo secret dw/rds-api (principio de mínimo privilegio)
 resource "aws_iam_role_policy" "api_secrets" {
   name = "InlineApiSecrets"
   role = aws_iam_role.api.id
@@ -311,6 +318,7 @@ resource "aws_iam_role_policy" "api_secrets" {
   })
 }
 
+# 6.g) bi-api / bi-ops → InvokeFunction tp-gold-api + Deny secrets sensibles
 resource "aws_iam_group_policy" "bi_api_invoke" {
   name  = "InlineInvokeGoldApi"
   group = aws_iam_group.bi_api.name

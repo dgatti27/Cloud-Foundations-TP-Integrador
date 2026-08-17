@@ -1,5 +1,5 @@
 """
-Lab 10 TP — Estimador de costos mensual (100% local, sin nube, sin costo).
+Estimador de costos mensual (100% local, sin nube, sin costo).
 
 Lee un JSON de servicios (usage × unit_price) y calcula:
   - costo on-demand (precio de lista)

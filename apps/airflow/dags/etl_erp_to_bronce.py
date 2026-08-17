@@ -55,6 +55,7 @@ def task_extract(**context):
     from pipeline.extract.erp_foxpro import extract_erp_all
 
     data = extract_erp_all()
+    #Serializa los datos para que puedan ser guardados en XCom.
     context["ti"].xcom_push(key="erp_raw", value=_serialize(data))
 
 
@@ -65,6 +66,8 @@ def task_transform(**context):
     """
     from pipeline.transform.normalize import normalize_erp_bundle
 
+    #Deserializa los datos para que puedan ser procesados por normalize_erp_bundle.
+    #XCom: el metadata DB de Airflow serializa valores como JSON.
     raw = _deserialize(context["ti"].xcom_pull(key="erp_raw", task_ids="extract_erp"))
     clean = normalize_erp_bundle(raw)
     context["ti"].xcom_push(key="erp_clean", value=_serialize(clean))
@@ -81,6 +84,8 @@ def task_load(**context):
 
 # ---------------------------------------------------------------------------
 # Helpers XCom — el metadata DB de Airflow serializa valores como JSON
+#Serializa los datos para que puedan ser guardados en XCom.
+#Decimal → float ; date/datetime → ISO string. Evita TypeError en xcom_push.
 # ---------------------------------------------------------------------------
 def _serialize(tables: dict) -> dict:
     """Decimal → float ; date/datetime → ISO string. Evita TypeError en xcom_push."""

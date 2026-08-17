@@ -1,18 +1,21 @@
 # =============================================================================
-# Lambda tp-gold-api
-# -----------------------------------------------------------------------------
-# Zip lite (handler + query_gold) — sin pg8000 en el apply Hobby (idempotente:
-# no corre pip en cada plan). IAM / log group viven en modules/iam y cloudwatch.
-# ALB stand-in = Compose :8088, no este módulo.
+# Lambda tp-gold-api — API de solo lectura sobre schema gold
+# =============================================================================
+# En AWS real: ALB → Lambda (subnet privada) → RDS.
+# En Hobby: alb-standin Compose :8088 invoca esta función en LocalStack.
 #
-# attach_vpc=false en Hobby: LocalStack a veces no soporta VpcConfig.
+# IAM (api-role) y log group viven en modules/iam y modules/cloudwatch.
+# Este módulo solo: zip del código + aws_lambda_function.
 # =============================================================================
 
+# ---------------------------------------------------------------------------
+# Variables
+# ---------------------------------------------------------------------------
 variable "function_name" { type = string }
-variable "role_arn" { type = string }
+variable "role_arn" { type = string } # api-role (modules/iam)
 variable "subnet_ids" { type = list(string) }
 variable "security_group_ids" { type = list(string) }
-variable "lambda_source_dir" { type = string }
+variable "lambda_source_dir" { type = string } # apps/api
 variable "ministack_endpoint_from_runtime" {
   type    = string
   default = "http://host.docker.internal:4567"
@@ -26,21 +29,31 @@ variable "attach_vpc" {
 }
 variable "tags" { type = map(string) }
 
-# Solo runtime de la API (apps/api/handler.py + query_gold.py).
+# ---------------------------------------------------------------------------
+# 1) Zip del runtime
+# source_dir = apps/api → handler.py + query_gold.py + vendor/ (pg8000).
+# Excluye alb_standin (es Compose, no va dentro de la función).
+# Hash del zip → source_code_hash (redeploy si cambia el código).
+# ---------------------------------------------------------------------------
 data "archive_file" "lambda_zip" {
   type        = "zip"
+  source_dir  = var.lambda_source_dir
   output_path = "${path.module}/../../generated/tp-gold-api.zip"
-
-  source {
-    content  = file("${var.lambda_source_dir}/handler.py")
-    filename = "handler.py"
-  }
-  source {
-    content  = file("${var.lambda_source_dir}/query_gold.py")
-    filename = "query_gold.py"
-  }
+  excludes = [
+    "alb_standin",
+    "alb_standin/**",
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/*.md",
+    ".gitkeep",
+  ]
 }
 
+# ---------------------------------------------------------------------------
+# 2) Función Lambda
+# handler = handler.lambda_handler (módulo.función).
+# Env: Secrets MiniStack + override host/port RDS desde el runtime Docker.
+# ---------------------------------------------------------------------------
 resource "aws_lambda_function" "gold_api" {
   function_name    = var.function_name
   role             = var.role_arn
@@ -52,6 +65,7 @@ resource "aws_lambda_function" "gold_api" {
   memory_size      = 256
   description      = "TP API — SELECT gold vía api_reader (dw/rds-api)"
 
+  # Variables que lee query_gold / boto3 en runtime LocalStack
   environment {
     variables = {
       SECRETS_ENDPOINT      = var.ministack_endpoint_from_runtime
@@ -64,6 +78,7 @@ resource "aws_lambda_function" "gold_api" {
     }
   }
 
+  # Opcional: ENI en subnet compute (to-be). En Hobby suele ir desactivado.
   dynamic "vpc_config" {
     for_each = var.attach_vpc ? [1] : []
     content {

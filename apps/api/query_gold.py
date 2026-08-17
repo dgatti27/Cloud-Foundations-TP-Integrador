@@ -28,6 +28,8 @@ from typing import Any
 # Allowlist de tablas gold (modelo TP: 6 dims + 2 facts)
 # Si no está acá → ValueError → handler responde 400. Nunca acepta bronce.*
 # ---------------------------------------------------------------------------
+#Las tablas gold las crea el seed RDS (`data/rds/seed_tp.sql`).
+#frozenset es un conjunto inmutable de tablas gold.
 GOLD_TABLES = frozenset(
     {
         "dim_fecha",
@@ -60,14 +62,14 @@ def _sm_client():
     import boto3
 
     endpoint = os.environ.get("SECRETS_ENDPOINT")
-    kwargs: dict[str, Any] = {
+    args: dict[str, Any] = {
         "region_name": os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
         "aws_access_key_id": os.environ.get("AWS_ACCESS_KEY_ID", "test"),
         "aws_secret_access_key": os.environ.get("AWS_SECRET_ACCESS_KEY", "test"),
     }
     if endpoint:
-        kwargs["endpoint_url"] = endpoint
-    return boto3.client("secretsmanager", **kwargs)
+        args["endpoint_url"] = endpoint
+    return boto3.client("secretsmanager", **args)
 
 
 def rds_api_conn() -> dict[str, Any]:
@@ -79,18 +81,31 @@ def rds_api_conn() -> dict[str, Any]:
     # Desde el container Lambda, el hostname interno de MiniStack no resuelve:
     # el demo setea RDS_HOST_OVERRIDE=host.docker.internal y puerto publicado.
     data["host"] = os.environ.get("RDS_HOST_OVERRIDE", data.get("host"))
-    data["port"] = int(os.environ.get("RDS_PORT_OVERRIDE", data.get("port", 5432)))
+    data["port"] = int(os.environ.get("RDS_PORT_OVERRIDE") or data.get("port") or 5432)
     return data
 
 
 # ---------------------------------------------------------------------------
 # Conexión Postgres
-# pg8000 = driver puro Python (entra fácil en el zip de Lambda en Windows).
+# pg8000 = driver puro Python (entra en el zip de Lambda vía apps/api/vendor/).
+# Pylance/pyright resuelve el import con pyrightconfig.json → extraPaths: vendor.
 # ---------------------------------------------------------------------------
+def _ensure_vendor_path() -> None:
+    """Agrega apps/api/vendor al path (zip Lambda o checkout local)."""
+    import sys
+    from pathlib import Path
+
+    vendor = Path(__file__).resolve().parent / "vendor"
+    if vendor.is_dir() and str(vendor) not in sys.path:
+        sys.path.insert(0, str(vendor))
+
+
+_ensure_vendor_path()
+import pg8000.dbapi  # noqa: E402  — tras vendor en sys.path
+
+
 def _connect(cfg: dict[str, Any]):
     """Abre conexión DB-API con usuario api_reader (o el del secret)."""
-    import pg8000.dbapi
-
     return pg8000.dbapi.connect(
         user=cfg.get("username") or cfg.get("user"),
         password=cfg["password"],
@@ -132,14 +147,17 @@ def _parse_condition(condition: str | None) -> tuple[str | None, list[Any]]:
         raise ValueError(
             "condition debe ser: col=valor | col!=valor | col>valor | col LIKE valor"
         )
+    #Obtiene el nombre de la columna, el operador y el valor.
     col, op, val = m.group(1), m.group(2).upper(), m.group(3).strip()
+    #Si el operador es "<>", se reemplaza por "!=".
     if op == "<>":
         op = "!="
-    # Quitar comillas envolventes del valor literales
+    #Quita las comillas envolventes del valor literal.
     if (val.startswith("'") and val.endswith("'")) or (
         val.startswith('"') and val.endswith('"')
     ):
         val = val[1:-1]
+    #Devuelve el fragmento WHERE con %s y el valor.
     return f'"{col}" {op} %s', [val]
 
 

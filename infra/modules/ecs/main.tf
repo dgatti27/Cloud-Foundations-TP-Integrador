@@ -1,15 +1,16 @@
 # =============================================================================
-# ECS / EFS del TP
-# -----------------------------------------------------------------------------
+# ECS / EFS del TP (cómputo ETL ≈ Airflow)
+# =============================================================================
 # Hobby (enable_ecs_api=false, default): LocalStack no expone APIs ecs/efs.
 #   → marcador apps/airflow/.iac-managed + inventario JSON.
-#   Runtime = Compose airflow-* (mismo contrato pedagógico que Fargate + EFS).
+#   Runtime real = Compose airflow-* (mismo contrato pedagógico que Fargate+EFS).
 #
 # AWS real / LocalStack Pro (enable_ecs_api=true):
-#   → cluster + EFS + mount targets en subnets compute.
+#   → cluster ECS + filesystem EFS + mount targets en subnets compute.
 #
-# IAM execution/task roles los crea modules/iam. Secret origen = modules/secrets.
-# Compose / trigger DAG = ecs.py --skip-infra (no IaC).
+# IAM execution/task: modules/iam.
+# Secrets origen: modules/secrets.
+# Trigger DAGs: labs/ecs/ecs.py (no IaC).
 # =============================================================================
 
 variable "enable_ecs_api" { type = bool }
@@ -20,7 +21,11 @@ variable "execution_role_arn" { type = string }
 variable "task_role_arn" { type = string }
 variable "tags" { type = map(string) }
 
-# Stand-in Hobby ≈ access points /airflow/dags y /airflow/logs
+# ---------------------------------------------------------------------------
+# 1) Marcador stand-in Hobby
+# Archivo en apps/airflow/.iac-managed: documenta que IaC “conoce” el EFS
+# local (dags/ + logs/). No crea EFS real en Hobby.
+# ---------------------------------------------------------------------------
 resource "local_file" "efs_standin_marker" {
   filename = "${var.repo_root}/apps/airflow/.iac-managed"
   content  = <<-EOT
@@ -31,12 +36,21 @@ resource "local_file" "efs_standin_marker" {
   EOT
 }
 
+# ---------------------------------------------------------------------------
+# 2) ECS cluster (solo si enable_ecs_api=true)
+# En Hobby count=0 → no llama API ecs.
+# ---------------------------------------------------------------------------
 resource "aws_ecs_cluster" "airflow" {
   count = var.enable_ecs_api ? 1 : 0
   name  = "tp-airflow"
   tags  = merge(var.tags, { Name = "tp-airflow" })
 }
 
+# ---------------------------------------------------------------------------
+# 3) EFS + mount targets (solo si enable_ecs_api=true)
+# ≈ access points /airflow/dags y /airflow/logs en el to-be.
+# Mount en cada subnet compute; SG = sg-efs (NFS :2049 desde ETL).
+# ---------------------------------------------------------------------------
 resource "aws_efs_file_system" "dags" {
   count          = var.enable_ecs_api ? 1 : 0
   creation_token = "tp-integrador-efs"
@@ -51,6 +65,11 @@ resource "aws_efs_mount_target" "compute" {
   security_groups = [var.sg_efs_id]
 }
 
+# ---------------------------------------------------------------------------
+# 4) Inventario JSON (siempre)
+# infra/generated/ecs_inventory.json — mode hobby-standin vs aws-api.
+# Útil para demos / evidencia del TP.
+# ---------------------------------------------------------------------------
 resource "local_file" "ecs_inventory" {
   filename = "${path.module}/../../generated/ecs_inventory.json"
   content = jsonencode({

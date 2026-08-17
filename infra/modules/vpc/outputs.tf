@@ -1,3 +1,4 @@
+# Outputs del módulo VPC — IDs que consumen rds / lambda / ecs / root.
 output "vpc_id" { value = aws_vpc.main.id }
 
 output "subnets" {
@@ -22,7 +23,7 @@ output "security_groups" {
 }
 
 output "nat_gateway_id" {
-  value = try(aws_nat_gateway.main[0].id, null)
+  value = try(aws_nat_gateway.main[0].id, null) # null si enable_nat=false
 }
 
 output "endpoint_s3_id" {

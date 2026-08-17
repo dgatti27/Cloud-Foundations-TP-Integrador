@@ -1,0 +1,8 @@
+{
+  "include": ["."],
+  "exclude": ["alb_standin", "**/__pycache__"],
+  "extraPaths": ["vendor"],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "error"
+}

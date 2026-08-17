@@ -42,8 +42,8 @@ def extract_erp(tabla: str = "ventas", **_) -> list[dict[str, Any]]:
     **_ :
         Ignorado; permite que Airflow pase context args sin romper.
     """
-    tabla = tabla.lower().strip()
-    if tabla not in ERP_TABLES:
+    table = tabla.lower().strip()
+    if table not in ERP_TABLES:
         raise ValueError(f"Tabla ERP desconocida: {tabla}. Usá: {list(ERP_TABLES)}")
 
     conn_cfg = source_conn("erp")
@@ -51,8 +51,8 @@ def extract_erp(tabla: str = "ventas", **_) -> list[dict[str, Any]]:
     try:
         # Ejecuta la consulta (trae registros) y devuelve los resultados como lista de dicts (fila → valor).
         # fetch_dicts es un helper en db.py que usa psycopg2 para ejecutar la consulta y devolver los resultados como lista de dicts.
-        rows = fetch_dicts(conn, ERP_TABLES[tabla])
-        print(f"[extract erp] tabla={tabla} filas={len(rows)} host={conn_cfg.get('host', conn_cfg.get('dsn'))}")
+        rows = fetch_dicts(conn, ERP_TABLES[table])
+        print(f"[extract erp] tabla={table} filas={len(rows)} host={conn_cfg.get('host', conn_cfg.get('dsn'))}")
         return rows
     finally:
         # Siempre cerrar: extractores no dejan conexiones abiertas al DAG

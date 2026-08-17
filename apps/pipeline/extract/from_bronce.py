@@ -33,14 +33,14 @@ BRONCE_TABLES = {
 #Extrae una tabla de bronce.erp_* como lista de dicts.
 def extract_bronce(tabla: str = "ventas", **_) -> list[dict[str, Any]]:
     """Lee UNA tabla de bronce.erp_* como lista de dicts."""
-    key = tabla.lower().strip()
-    if key not in BRONCE_TABLES:
+    table = tabla.lower().strip()
+    if table not in BRONCE_TABLES:
         raise ValueError(f"Tabla bronce desconocida: {tabla}. Usá: {list(BRONCE_TABLES)}")
 
     conn = connect(rds_etl_conn())
     try:
-        rows = fetch_dicts(conn, BRONCE_TABLES[key])
-        print(f"[extract bronce] tabla={key} filas={len(rows)}")
+        rows = fetch_dicts(conn, BRONCE_TABLES[table])
+        print(f"[extract bronce] tabla={table} filas={len(rows)}")
         return rows
     finally:
         conn.close()

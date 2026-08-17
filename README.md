@@ -437,7 +437,7 @@ try { Invoke-RestMethod "http://localhost:8088/gold/query?table=dim_cliente&limi
 Esperado **sin ETL**:
 
 - `hecho_ventas` → 400 `Tabla no permitida en gold`
-- `dim_cliente` → 200 con filas **o** 500 `No module named 'pg8000'` (zip Hobby lite; la función existe, falta el driver en el zip)
+- `dim_cliente` → 200 con filas (driver `pg8000` en `apps/api/vendor/`; requiere `tofu apply` tras el cambio de zip)
 
 Si sale 502 / función inexistente: no corrió `tofu apply` o LocalStack se recreó sin re-apply.
 
@@ -545,7 +545,7 @@ No apliques IaC fuera de [`infra/`](infra/).
 | Airflow no muestra DAGs | Deben estar en `apps/airflow/dags/`; logs en `apps/airflow/logs/` |
 | `InvalidAccessKeyId` en `s3 ls` | MinIO usa `minioadmin`/`minioadmin`, no `test`/`test` |
 | ALB `:8088` 502 | Lambda aún no aplicada (`tofu apply`) o LocalStack no healthy |
-| `gold/query` → `No module named 'pg8000'` | Zip Hobby lite; la Lambda está up. Falta el driver en el paquete |
+| `gold/query` → `No module named 'pg8000'` | Reaplicá IaC tras venderizar: el zip debe incluir `apps/api/vendor/`. Rebuild: `pip install -r apps/api/requirements.txt -t apps/api/vendor` |
 | pgAdmin no conecta a RDS | Puerto host MiniStack (`docker ps --filter name=ministack-rds`); a veces 15434 ≠ 15432 |
 | Plan con drifts eternos en SG refs | Ya mitigado en HCL (`ignore_changes`); re-aplicá una vez |
 | Symlinks Airflow / Docker build en Windows | No copies `apps/airflow/logs` al build; Compose los monta |

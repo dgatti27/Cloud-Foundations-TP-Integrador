@@ -1,10 +1,13 @@
 # =============================================================================
 # FinOps — Budget AWS opcional + inventario local
-# -----------------------------------------------------------------------------
-# Hobby (create_budget=false, default): solo inventario JSON. LocalStack no
-# implementa Budgets API de forma usable; la estimación es pricing.py.
+# =============================================================================
+# Hobby (create_budget=false, default):
+#   LocalStack no implementa Budgets de forma usable.
+#   Solo escribe infra/generated/finops_inventory.json.
+#   Estimación de costo → labs/finops/pricing.py + docs/finops.md.
 #
-# AWS real: create_budget=true + notify_email real → aws_budgets_budget.
+# AWS real (create_budget=true + email real):
+#   Crea aws_budgets_budget con alertas ACTUAL y FORECASTED.
 # =============================================================================
 
 variable "tags" { type = map(string) }
@@ -26,12 +29,18 @@ variable "forecasted_threshold_pct" {
   default = 100
 }
 
+# ---------------------------------------------------------------------------
+# Locals — leen budget.json (nombre + límite USD del techo SMART del TP)
+# ---------------------------------------------------------------------------
 locals {
   budget_file   = jsondecode(file("${path.module}/budget.json"))
   budget_name   = local.budget_file["BudgetName"]
   budget_amount = local.budget_file["BudgetLimit"]["Amount"]
 }
 
+# ---------------------------------------------------------------------------
+# Guardrail: no crear Budget con email placeholder
+# ---------------------------------------------------------------------------
 check "notify_email_not_placeholder" {
   assert {
     condition     = !var.create_budget || var.notify_email != "you@example.com"
@@ -39,6 +48,9 @@ check "notify_email_not_placeholder" {
   }
 }
 
+# ---------------------------------------------------------------------------
+# Inventario local (siempre) — evidencia FinOps en Hobby
+# ---------------------------------------------------------------------------
 resource "local_file" "finops_inventory" {
   filename = "${path.module}/../../generated/finops_inventory.json"
   content = jsonencode({
@@ -62,6 +74,10 @@ resource "local_file" "finops_inventory" {
   })
 }
 
+# ---------------------------------------------------------------------------
+# Budget AWS real (solo create_budget=true)
+# Alertas: 80% gasto actual · 100% forecast → email.
+# ---------------------------------------------------------------------------
 resource "aws_budgets_budget" "tp" {
   count = var.create_budget ? 1 : 0
 

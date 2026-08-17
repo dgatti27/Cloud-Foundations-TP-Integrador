@@ -6,6 +6,7 @@ set -euo pipefail
 ROOT="${WORKSPACE:-/workspace}"
 cd "$ROOT"
 
+# Credenciales se inyectan en runtime (compose / -e), no en la imagen.
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
 export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}"
 export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-test}"
@@ -17,11 +18,13 @@ export LOCALSTACK_ENDPOINT="${LOCALSTACK_ENDPOINT:-http://localstack-integrador:
 export MINISTACK_ENDPOINT="${MINISTACK_ENDPOINT:-http://ministack-integrador:4566}"
 export MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://s3-soporte:9000}"
 
+#Variables de entorno para OpenTofu.
 export TF_VAR_localstack_endpoint="${TF_VAR_localstack_endpoint:-$LOCALSTACK_ENDPOINT}"
 export TF_VAR_ministack_endpoint="${TF_VAR_ministack_endpoint:-$MINISTACK_ENDPOINT}"
 export TF_VAR_minio_endpoint="${TF_VAR_minio_endpoint:-$MINIO_ENDPOINT}"
 export TF_VAR_repo_root="${TF_VAR_repo_root:-..}"
 
+#Función para esperar a que un servicio esté disponible.
 wait_http() {
   local url="$1"
   local name="$2"
@@ -38,6 +41,7 @@ wait_http() {
   return 1
 }
 
+#Función para esperar a que todos los backends estén disponibles.
 wait_backends() {
   wait_http "${LOCALSTACK_ENDPOINT}/_localstack/health" "LocalStack" 90 || \
     wait_http "${LOCALSTACK_ENDPOINT}/" "LocalStack" 30
@@ -49,12 +53,14 @@ wait_backends() {
 cmd="${1:-apply}"
 shift || true
 
+#Función para ejecutar OpenTofu.
 tofu_infra() {
   cd "$ROOT/infra"
   tofu init -upgrade
   exec tofu "$@"
 }
 
+#Switch para ejecutar el comando pasado por argumento.
 case "$cmd" in
   apply)
     wait_backends

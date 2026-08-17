@@ -1,40 +1,61 @@
+# =============================================================================
+# Outputs del root — lo que ves con `tofu output`
+# =============================================================================
+# Útiles para smoke checks, demos y scripts (ecs.py, Postman, evidencia).
+# No imprimen passwords (solo names/ARNs/endpoints).
+# =============================================================================
+
+# --- Red ---
 output "vpc_id" {
-  value = module.vpc.vpc_id
+  description = "ID de la VPC Multi-AZ."
+  value       = module.vpc.vpc_id
 }
 
 output "vpc_config_path" {
-  value = local_file.vpc_config.filename
+  description = "JSON inventario VPC (generated/)."
+  value       = local_file.vpc_config.filename
 }
 
 output "security_groups" {
-  value = module.vpc.security_groups
+  description = "Mapa de SGs: alb, api, ecs_etl, rds, efs."
+  value       = module.vpc.security_groups
 }
 
 output "subnets" {
-  value = module.vpc.subnets
+  description = "Mapa de subnet IDs por rol (public/rds/compute)."
+  value       = module.vpc.subnets
 }
 
+# --- Lake ---
 output "lake_buckets" {
-  value = module.s3.bucket_ids
+  description = "Buckets MinIO creados (nombre → id)."
+  value       = module.s3.bucket_ids
 }
 
+# --- RDS + secrets ---
 output "db_endpoint" {
-  value = module.rds.endpoint
+  description = "Endpoint host:port de la instancia RDS."
+  value       = module.rds.endpoint
 }
 
 output "db_address" {
-  value = module.rds.address
+  description = "Hostname/address MiniStack de la RDS."
+  value       = module.rds.address
 }
 
 output "secret_names" {
-  value = module.secrets.secret_names
+  description = "Nombres de secrets (dw/rds-*, dw/erp, dw/origen-demo)."
+  value       = module.secrets.secret_names
 }
 
+# --- Cómputo / API ---
 output "lambda_function" {
-  value = module.lambda_api.function_name
+  description = "Nombre de la función gold API."
+  value       = module.lambda_api.function_name
 }
 
 output "iam_roles" {
+  description = "ARNs de roles de servicio."
   value = {
     app           = module.iam.app_role_arn
     api           = module.iam.api_role_arn
@@ -44,18 +65,23 @@ output "iam_roles" {
 }
 
 output "ecs_mode" {
-  value = module.ecs.mode
-}
-
-output "finops_inventory" {
-  value = module.finops.inventory_path
+  description = "hobby-standin | aws-api."
+  value       = module.ecs.mode
 }
 
 output "cloudwatch_log_groups" {
-  value = module.cloudwatch.log_group_names
+  description = "Nombres de log groups creados."
+  value       = module.cloudwatch.log_group_names
+}
+
+# --- FinOps / endpoints emuladores ---
+output "finops_inventory" {
+  description = "Path del inventario FinOps JSON."
+  value       = module.finops.inventory_path
 }
 
 output "endpoints" {
+  description = "URLs de LocalStack / MiniStack / MinIO usadas en el apply."
   value = {
     localstack = var.localstack_endpoint
     ministack  = var.ministack_endpoint

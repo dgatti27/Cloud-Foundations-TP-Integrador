@@ -1,12 +1,13 @@
-# =============================================================================
+# ---------------------------------------------------------------------------
 # RDS PostgreSQL Multi-AZ — MiniStack → container Postgres
-# -----------------------------------------------------------------------------
-# Subnet group + instancia. Secrets y seed viven en el root (modules/secrets
-# + null_resource.rds_seed) para no duplicar passwords/state.
+# ---------------------------------------------------------------------------
+# Este módulo solo crea: subnet group + instancia.
+# Secrets → modules/secrets. Seed SQL + ALTER ROLE → root null_resource
+# (scripts/post_rds.py). No duplicar passwords aquí.
 #
-# Parámetros = to-be TP (medium, MultiAZ, encrypted, privada).
-# skip_final_snapshot: entorno local — destroy sin snapshot final obligatorio.
-# =============================================================================
+# Parámetros ≈ to-be TP (medium, MultiAZ, encrypted, privada).
+# skip_final_snapshot=true: lab local, destroy sin snapshot obligatorio.
+# ---------------------------------------------------------------------------
 
 variable "identifier" { type = string }
 variable "engine_version" {

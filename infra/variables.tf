@@ -1,3 +1,15 @@
+# =============================================================================
+# Variables del root module (inputs de tofu)
+# =============================================================================
+# Overrides: terraform.tfvars (gitignore) o -var / TF_VAR_*.
+# Ejemplo: terraform.tfvars.example
+#
+# Desde la toolbox Compose, varios TF_VAR_* se inyectan (endpoints Docker).
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Proyecto / región / credenciales dummy Hobby
+# ---------------------------------------------------------------------------
 variable "project_name" {
   type        = string
   description = "Slug del proyecto (tags)."
@@ -10,29 +22,37 @@ variable "region" {
 }
 
 variable "aws_access_key" {
-  type    = string
-  default = "test"
+  type        = string
+  description = "Access key hacia LocalStack/MiniStack (Hobby: test)."
+  default     = "test"
 }
 
 variable "aws_secret_key" {
-  type      = string
-  default   = "test"
-  sensitive = true
+  type        = string
+  default     = "test"
+  sensitive   = true
 }
 
+# ---------------------------------------------------------------------------
+# Endpoints de los tres backends (host local por defecto)
+# Toolbox: TF_VAR_* apunta a nombres Docker (localstack-integrador:4566, …).
+# ---------------------------------------------------------------------------
 variable "localstack_endpoint" {
-  type    = string
-  default = "http://localhost:4566"
+  type        = string
+  description = "IAM, VPC, Lambda, CloudWatch, STS."
+  default     = "http://localhost:4566"
 }
 
 variable "ministack_endpoint" {
-  type    = string
-  default = "http://localhost:4567"
+  type        = string
+  description = "RDS + Secrets Manager (DB)."
+  default     = "http://localhost:4567"
 }
 
 variable "minio_endpoint" {
-  type    = string
-  default = "http://localhost:9000"
+  type        = string
+  description = "S3 API del data lake."
+  default     = "http://localhost:9000"
 }
 
 variable "minio_access_key" {
@@ -46,11 +66,23 @@ variable "minio_secret_key" {
   sensitive = true
 }
 
+# ---------------------------------------------------------------------------
+# Red
+# ---------------------------------------------------------------------------
 variable "vpc_cidr" {
   type    = string
   default = "10.0.0.0/16"
 }
 
+variable "enable_nat" {
+  type        = bool
+  description = "NAT Gateway + ruta 0.0.0.0/0 en subnets compute (salida ETL)."
+  default     = true
+}
+
+# ---------------------------------------------------------------------------
+# RDS
+# ---------------------------------------------------------------------------
 variable "db_identifier" {
   type    = string
   default = "tp-dw-db"
@@ -76,30 +108,10 @@ variable "db_allocated_storage" {
   default = 50
 }
 
-variable "lake_buckets" {
-  type        = list(string)
-  description = "Buckets del data lake en MinIO."
-  default     = ["backup-data-lake", "snapshot-data-lake", "staging-data-lake"]
-}
-
-variable "lambda_function_name" {
-  type    = string
-  default = "tp-gold-api"
-}
-
-variable "enable_nat" {
+variable "apply_rds_seed" {
   type        = bool
-  description = "NAT Gateway + ruta 0.0.0.0/0 en subnets compute."
+  description = "Tras crear RDS: seed_tp.sql + ALTER ROLE vía scripts/post_rds.py."
   default     = true
-}
-
-variable "enable_ecs_api" {
-  type        = bool
-  description = <<-EOT
-    true = declarar ECS cluster / EFS vía API (AWS real o LocalStack Pro).
-    false (Hobby) = solo IAM + marcadores stand-in (Compose Airflow + apps/airflow/).
-  EOT
-  default     = false
 }
 
 variable "rds_host_override" {
@@ -114,15 +126,38 @@ variable "rds_port_override" {
   default     = 15432
 }
 
-variable "apply_rds_seed" {
-  type        = bool
-  description = "Ejecutar seed_tp.sql + roles vía scripts/post_rds.py tras crear RDS."
-  default     = true
+# ---------------------------------------------------------------------------
+# Data lake (MinIO)
+# ---------------------------------------------------------------------------
+variable "lake_buckets" {
+  type        = list(string)
+  description = "Buckets del data lake en MinIO."
+  default     = ["backup-data-lake", "snapshot-data-lake", "staging-data-lake"]
 }
 
+# ---------------------------------------------------------------------------
+# Lambda / ECS
+# ---------------------------------------------------------------------------
+variable "lambda_function_name" {
+  type    = string
+  default = "tp-gold-api"
+}
+
+variable "enable_ecs_api" {
+  type        = bool
+  description = <<-EOT
+    true = declarar ECS cluster / EFS vía API (AWS real o LocalStack Pro).
+    false (Hobby) = solo IAM + marcadores stand-in (Compose Airflow + apps/airflow/).
+  EOT
+  default = false
+}
+
+# ---------------------------------------------------------------------------
+# Paths / FinOps
+# ---------------------------------------------------------------------------
 variable "repo_root" {
   type        = string
-  description = "Raíz del repo (para paths a seed SQL, apps/api, apps/airflow)."
+  description = "Raíz del repo relativa a infra/ (seed SQL, apps/api, apps/airflow)."
   default     = ".."
 }
 

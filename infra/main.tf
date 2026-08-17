@@ -1,16 +1,27 @@
 # =============================================================================
-# Root module TP — instancia los módulos (única fuente IaC del proyecto)
-# -----------------------------------------------------------------------------
-# Grafo: IAM ∥ VPC ∥ S3 ∥ CloudWatch
-#          └→ RDS (subnets + SG) → Secrets (host RDS) → seed SQL
-#          └→ Lambda (role + opcional VPC)
-#          └→ ECS/EFS (API real o stand-in Hobby)
-#          └→ FinOps inventario (Budget AWS solo si create_budget)
+# Root module TP — única fuente IaC del proyecto
+# =============================================================================
+# Instancia los módulos bajo modules/ y cablea dependencias.
 #
-# Idempotencia: tofu apply N veces → sin recrear si el state coincide.
-# Un solo state: no corras otros árboles IaC en paralelo (chocan names).
+# Grafo de apply:
+#   random_password
+#   IAM ∥ VPC ∥ S3 ∥ CloudWatch
+#        └→ RDS (subnets + SG VPC) → Secrets (host RDS) → rds_seed (post_rds.py)
+#        └→ Lambda (api-role + zip apps/api)
+#        └→ ECS/EFS (API real o stand-in Hobby)
+#        └→ FinOps inventario (+ Budget solo si create_budget)
+#        └→ local_file vpc_config.json
+#
+# Idempotencia: tofu apply N veces no recrea si el state coincide.
+# Un solo state: no mezclar otros árboles IaC en paralelo (chocan names).
 # =============================================================================
 
+# ---------------------------------------------------------------------------
+# Passwords generadas (viven en el state; sensitive)
+# master → RDS + secret dw/rds-master
+# etl    → secret dw/rds-etl + ALTER ROLE etl_writer (post_rds)
+# api    → secret dw/rds-api + ALTER ROLE api_reader (post_rds)
+# ---------------------------------------------------------------------------
 resource "random_password" "master" {
   length  = 20
   special = false
@@ -26,6 +37,9 @@ resource "random_password" "api" {
   special = false
 }
 
+# ---------------------------------------------------------------------------
+# IAM — roles, grupos, users, policies (LocalStack)
+# ---------------------------------------------------------------------------
 module "iam" {
   source = "./modules/iam"
 
@@ -37,6 +51,9 @@ module "iam" {
   tags         = local.common_tags
 }
 
+# ---------------------------------------------------------------------------
+# VPC — Multi-AZ, NAT, SGs, VPCE S3 (LocalStack)
+# ---------------------------------------------------------------------------
 module "vpc" {
   source = "./modules/vpc"
 
@@ -51,6 +68,9 @@ module "vpc" {
   tags         = local.common_tags
 }
 
+# ---------------------------------------------------------------------------
+# S3 data lake — buckets en MinIO (provider aws.minio)
+# ---------------------------------------------------------------------------
 module "s3" {
   source = "./modules/s3"
 
@@ -62,6 +82,9 @@ module "s3" {
   tags         = local.common_tags
 }
 
+# ---------------------------------------------------------------------------
+# CloudWatch — log groups Airflow / Lambda / ETL (LocalStack)
+# ---------------------------------------------------------------------------
 module "cloudwatch" {
   source = "./modules/cloudwatch"
 
@@ -72,6 +95,10 @@ module "cloudwatch" {
   tags = local.common_tags
 }
 
+# ---------------------------------------------------------------------------
+# RDS Postgres Multi-AZ — MiniStack (container Postgres real)
+# Depende de subnets + SG rds de la VPC.
+# ---------------------------------------------------------------------------
 module "rds" {
   source = "./modules/rds"
 
@@ -90,11 +117,16 @@ module "rds" {
   tags                   = local.common_tags
 }
 
-# Host en secrets: el address MiniStack (red Docker). Apps Compose usan overrides.
+# Host que va dentro de los secrets (address MiniStack / red Docker).
+# Apps en Compose overridean con RDS_HOST_OVERRIDE (host.docker.internal).
 locals {
   rds_host_for_secrets = coalesce(module.rds.address, var.rds_host_override)
 }
 
+# ---------------------------------------------------------------------------
+# Secrets Manager — dw/rds-*, dw/erp, dw/origen-demo (MiniStack)
+# JSON con passwords random + hosts de orígenes Compose.
+# ---------------------------------------------------------------------------
 module "secrets" {
   source = "./modules/secrets"
 
@@ -111,6 +143,7 @@ module "secrets" {
   api_password    = random_password.api.result
   rds_host        = local.rds_host_for_secrets
 
+  # Camino A — DAG etl_rds_comprobation
   origen_demo = {
     host     = "postgres-bronce"
     port     = 5432
@@ -119,6 +152,7 @@ module "secrets" {
     password = "postgres"
   }
 
+  # Camino B — extract ERP (pipeline)
   erp = {
     host     = "postgres-erp"
     port     = 5432
@@ -130,7 +164,12 @@ module "secrets" {
   depends_on = [module.rds]
 }
 
-# Seed schemas/roles + ALTER passwords (idempotente). Requiere Docker + MiniStack RDS.
+# ---------------------------------------------------------------------------
+# Seed SQL post-RDS (null_resource + local-exec)
+# Corre scripts/post_rds.py: seed_tp.sql + ALTER ROLE passwords.
+# triggers: si cambia DB, passwords o el archivo seed → vuelve a correr.
+# Requiere Docker + container MiniStack RDS up.
+# ---------------------------------------------------------------------------
 resource "null_resource" "rds_seed" {
   count = var.apply_rds_seed ? 1 : 0
 
@@ -159,6 +198,10 @@ resource "null_resource" "rds_seed" {
   depends_on = [module.rds, module.secrets]
 }
 
+# ---------------------------------------------------------------------------
+# Lambda tp-gold-api — zip apps/api (handler + query_gold + vendor pg8000)
+# attach_vpc=false en Hobby (LocalStack a veces no soporta VpcConfig).
+# ---------------------------------------------------------------------------
 module "lambda_api" {
   source = "./modules/lambda"
 
@@ -166,19 +209,23 @@ module "lambda_api" {
     aws = aws.localstack
   }
 
-  function_name     = var.lambda_function_name
-  role_arn          = module.iam.api_role_arn
-  subnet_ids        = module.vpc.compute_subnet_ids
+  function_name      = var.lambda_function_name
+  role_arn           = module.iam.api_role_arn
+  subnet_ids         = module.vpc.compute_subnet_ids
   security_group_ids = [module.vpc.security_groups.api]
-  lambda_source_dir = "${local.repo_root_abs}/apps/api"
-  rds_host_override = var.rds_host_override
-  rds_port_override = var.rds_port_override
-  attach_vpc        = false
-  tags              = local.common_tags
+  lambda_source_dir  = "${local.repo_root_abs}/apps/api"
+  rds_host_override  = var.rds_host_override
+  rds_port_override  = var.rds_port_override
+  attach_vpc         = false
+  tags               = local.common_tags
 
   depends_on = [module.cloudwatch, module.secrets]
 }
 
+# ---------------------------------------------------------------------------
+# ECS / EFS — Hobby: marcador + inventario; Pro/AWS: cluster + EFS real
+# Runtime Hobby del ETL = Compose airflow-* (labs/ecs/ecs.py).
+# ---------------------------------------------------------------------------
 module "ecs" {
   source = "./modules/ecs"
 
@@ -186,15 +233,18 @@ module "ecs" {
     aws = aws.localstack
   }
 
-  enable_ecs_api       = var.enable_ecs_api
-  repo_root            = local.repo_root_abs
-  sg_efs_id            = module.vpc.security_groups.efs
-  subnet_ids           = module.vpc.compute_subnet_ids
-  execution_role_arn   = module.iam.ecs_execution_role_arn
-  task_role_arn        = module.iam.app_role_arn
-  tags                 = local.common_tags
+  enable_ecs_api     = var.enable_ecs_api
+  repo_root          = local.repo_root_abs
+  sg_efs_id          = module.vpc.security_groups.efs
+  subnet_ids         = module.vpc.compute_subnet_ids
+  execution_role_arn = module.iam.ecs_execution_role_arn
+  task_role_arn      = module.iam.app_role_arn
+  tags               = local.common_tags
 }
 
+# ---------------------------------------------------------------------------
+# FinOps — inventario JSON; Budget AWS solo si create_budget=true
+# ---------------------------------------------------------------------------
 module "finops" {
   source = "./modules/finops"
 
@@ -207,17 +257,20 @@ module "finops" {
   tags          = local.common_tags
 }
 
-# Inventario VPC (mismo shape que vpc_config.json de referencia)
+# ---------------------------------------------------------------------------
+# Inventario VPC en JSON (evidencia / demos)
+# generated/ + copia en labs/vpc/ para scripts del lab.
+# ---------------------------------------------------------------------------
 resource "local_file" "vpc_config" {
   filename = "${path.root}/generated/vpc_config.json"
   content = jsonencode({
-    vpc_id = module.vpc.vpc_id
-    region = var.region
-    subnets = module.vpc.subnets
+    vpc_id          = module.vpc.vpc_id
+    region          = var.region
+    subnets         = module.vpc.subnets
     security_groups = module.vpc.security_groups
-    nat         = module.vpc.nat_gateway_id
-    endpoint_s3 = module.vpc.endpoint_s3_id
-    notes       = "Generado por OpenTofu. EFS/ECS API = enable_ecs_api; Hobby usa stand-in."
+    nat             = module.vpc.nat_gateway_id
+    endpoint_s3     = module.vpc.endpoint_s3_id
+    notes           = "Generado por OpenTofu. EFS/ECS API = enable_ecs_api; Hobby usa stand-in."
   })
 }
 

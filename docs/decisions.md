@@ -125,25 +125,25 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 
 ---
 
-### 006 — Zip Lambda lite (sin `pg8000` en el apply Hobby)
+### 006 — Zip Lambda con `pg8000` vendorizado (sin pip en el apply)
 
-**Decision:** el zip de `tp-gold-api` lleva solo `handler.py` + `query_gold.py`. No se corre `pip` en cada `tofu plan`/`apply`.
+**Decision:** el zip de `tp-gold-api` incluye `handler.py`, `query_gold.py` y `apps/api/vendor/` (`pg8000` + `scramp` **commiteados**). No se corre `pip` en cada `tofu plan`/`apply`.
 
-**Contexto:** incluir `pg8000` vía `pip install` en `local-exec` rompía idempotencia (hash del zip / mtimes) y alargaba el apply en Windows.
+**Contexto:** incluir el driver vía `pip` en `local-exec` rompía idempotencia (hash del zip / mtimes) y alargaba el apply en Windows. El zip lite sin driver devolvía `500 No module named 'pg8000'` en `GET /gold/query`.
 
 **Alternativas:**
 
 1. `pip` + layer/zip en cada apply.  
-2. Vendor `pg8000`+`scramp` commiteados en `apps/api/`.  
-3. **Zip lite ahora** (elegida); driver cuando se pule la API/ETL.
+2. **Vendor `pg8000`+`scramp` en `apps/api/vendor/`** (elegida).  
+3. Zip lite sin driver (rechazada: bloquea consultas gold).
 
 **Tradeoff:**
 
-- (+) Apply Hobby estable: Lambda **Active**, ALB `/health` OK.  
-- (−) `GET /gold/query` → **500 `No module named 'pg8000'`** hasta empaquetar el driver.  
-- (−) No es bloqueo de infra; sí de consulta gold (Qlik/Postman SQL).
+- (+) Apply Hobby estable e idempotente.  
+- (+) `GET /gold/query` puede hablar con RDS (`api_reader`).  
+- (−) Vendor ocupa espacio en el repo; hay que actualizarlo a mano si sube la versión.
 
-**Resultado:** documentado en README §5.5 y [`finops.md`](finops.md) §3. No se considera crítico para “la infra levantó”. Se revisa junto con el ETL.
+**Resultado:** `infra/modules/lambda` zippea `source_dir` de `apps/api` (excluye `alb_standin`). Rebuild: `pip install -r apps/api/requirements.txt -t apps/api/vendor`.
 
 ---
 

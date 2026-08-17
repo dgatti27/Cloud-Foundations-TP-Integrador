@@ -7,6 +7,13 @@ Usa docker exec contra el container MiniStack de la instancia.
 Config vía env (evita quoting roto en Windows cmd):
   POST_RDS_IDENTIFIER, POST_RDS_MASTER_USER, POST_RDS_DBNAME,
   POST_RDS_SEED, POST_RDS_MASTER_PASSWORD, POST_RDS_ETL_PASSWORD, POST_RDS_API_PASSWORD
+  
+Script post-apply de la RDS MiniStack. OpenTofu lo llama (vía null_resource / local-exec) después de crear tp-dw-db.
+    Encuentra el contenedor Docker de la RDS (ministack-rds… / tp-dw-db).
+    Espera a que Postgres esté listo (pg_isready).
+    Aplica data/rds/seed_tp.sql con docker exec + psql → schemas bronce/gold, tablas, roles etl_writer / api_reader.
+    Alinea passwords de esos roles con los secrets (ALTER ROLE … PASSWORD).
+Sin esto, la RDS existiría vacía (o con roles desfasados respecto a Secrets Manager) y los DAGs / la API gold no podrían escribir/leer bien
 """
 from __future__ import annotations
 
@@ -17,7 +24,7 @@ import sys
 import time
 from pathlib import Path
 
-
+#Busca el container MiniStack RDS para el identificador.
 def find_rds_container(identifier: str) -> str:
     listed = subprocess.run(
         ["docker", "ps", "--format", "{{.Names}}", "--filter", "name=ministack-rds"],
@@ -33,7 +40,7 @@ def find_rds_container(identifier: str) -> str:
         f"No encuentro container MiniStack RDS para '{identifier}'. Vistos: {names or '(ninguno)'}"
     )
 
-
+#Espera a que Postgres esté listo (pg_isready).
 def wait_ready(container: str, user: str, timeout: int = 90) -> None:
     for _ in range(timeout):
         r = subprocess.run(
@@ -46,7 +53,7 @@ def wait_ready(container: str, user: str, timeout: int = 90) -> None:
         time.sleep(1)
     raise SystemExit(f"pg_isready timeout en {container}")
 
-
+#Aplica data/rds/seed_tp.sql con docker exec + psql → schemas bronce/gold, tablas, roles etl_writer / api_reader.
 def psql(container: str, user: str, dbname: str, password: str, sql: str) -> None:
     cmd = [
         "docker", "exec", "-i", container,
@@ -62,7 +69,7 @@ def psql(container: str, user: str, dbname: str, password: str, sql: str) -> Non
         err = (result.stderr or b"").decode("utf-8", errors="replace")
         raise SystemExit(f"psql falló:\n{err[:800]}")
 
-
+#Main function.
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--identifier", default=os.environ.get("POST_RDS_IDENTIFIER", "tp-dw-db"))

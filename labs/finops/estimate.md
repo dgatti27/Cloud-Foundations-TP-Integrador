@@ -40,7 +40,7 @@ python pricing.py --budget 300
 
 ---
 
-## Desafío 1 — NAT vs VPC endpoints (lab 07-v2)
+## Desafío 1 — NAT vs VPC endpoints
 
 **Contexto TP:** el diseño ya tiene **Gateway endpoint S3** ($0). El NAT sigue siendo necesario para orígenes ERP/Internet, pero Secrets/S3 no deberían ir por NAT.
 
@@ -160,19 +160,6 @@ Presupuesto vs realidad
 - [ ] Alertas 80% ACTUAL y 100% FORECASTED
 
 Hobby LocalStack: Budgets = **Pro-only** — modelar JSON; crear budget en AWS real.
-
----
-
-## Mapa lab → línea de costo
-
-| Lab | Servicio(s) en `services.json` | Módulo IaC |
-|---|---|---|
-| 07-v2 | `nat-gateway`, `nat-data-processed`, `vpce-s3-gateway` | `infra/modules/vpc` |
-| 08-tp | `rds-postgres-maz`, `rds-storage-gp3`, `rds-backup`, `secrets-manager` | `infra/modules/rds` + `secrets` |
-| 09b | `ecs-fargate-airflow`, `efs-airflow` | `infra/modules/ecs` (Hobby: Compose Airflow) |
-| lab-api | `alb-api`, `alb-lcu`, `lambda-gold-api`, `data-egress` | `infra/modules/lambda` + alb-standin |
-| lake | `s3-data-lake`, `s3-requests` | `infra/modules/s3` (MinIO) |
-| ops | `cloudwatch` | `infra/modules/cloudwatch` |
 
 ---
 

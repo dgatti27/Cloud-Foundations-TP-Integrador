@@ -1,15 +1,25 @@
-# Copia a terraform.tfvars si querés overrides locales (gitignoreados).
+# =============================================================================
+# terraform.tfvars.example — plantilla de overrides locales
+# =============================================================================
+# Uso:
+#   copy terraform.tfvars.example terraform.tfvars
+#   (terraform.tfvars suele estar en .gitignore)
+#
+# Solo hace falta si querés cambiar defaults de variables.tf.
+# =============================================================================
+
 project_name = "tp-integrador"
 region       = "us-east-1"
 
+# Endpoints desde el HOST (Docker Desktop publica estos puertos)
 localstack_endpoint = "http://localhost:4566"
 ministack_endpoint  = "http://localhost:4567"
 minio_endpoint      = "http://localhost:9000"
 
-enable_nat     = true
-enable_ecs_api = false   # true solo en AWS real / LocalStack Pro
-apply_rds_seed = true
-create_budget  = false   # true solo en AWS real + finops_notify_email
+enable_nat     = true  # NAT en public-alb-a + ruta compute
+enable_ecs_api = false # true solo en AWS real / LocalStack Pro
+apply_rds_seed = true  # post_rds.py tras crear RDS
+create_budget  = false # true solo en AWS real + finops_notify_email
 
 # Puerto host del Postgres MiniStack (docker ps --filter name=ministack-rds).
 # Default 15432; en algunos hosts MiniStack publica 15434.
