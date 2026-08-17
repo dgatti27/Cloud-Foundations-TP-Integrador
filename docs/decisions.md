@@ -24,7 +24,6 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 - (+) Reproduce IAM, VPC, S3, RDS, Secrets, Lambda, logs.  
 - (−) Hobby **no** trae ECS, EFS, ELBv2 ni Budgets → hay que *stand-inear* (decisión 003).  
 - (−) Tres backends (4566 / 4567 / 9000): hay que no mezclar endpoints.  
-- (−) En Windows/OneDrive, `tofu` en el host a veces falla al cargar providers → conviene la imagen toolbox `tp-integrador-iac` (perfil Compose `iac`).
 
 **Resultado:** `docker compose up -d` + `cd infra && tofu apply` (o `docker compose --profile iac run --rm tp-iac apply`). Budget AWS solo cuando `create_budget=true` en cuenta real. Estimación siempre local (`python labs/finops/pricing.py`). Bajar limpio: decisión 011.
 
@@ -173,7 +172,7 @@ Relacionado: [`finops.md`](finops.md) · [`Solution_Architecture.md`](Solution_A
 
 ### 008 — RDS MiniStack + puerto host dinámico
 
-**Decision:** Postgres “RDS” del TP es **MiniStack** (`:4567` API, container `ministack-rds-*-tp-dw-db`). El puerto **publicado en el host** no está fijo en 15432: MiniStack puede usar 15433 / 15434, etc.
+**Decision:** Postgres “RDS” del TP es **MiniStack** (`:4567` API, container `ministack-rds-*-tp-dw-db`). Localstack no incluye RDS. El puerto **publicado en el host** no está fijo en 15432: MiniStack puede usar 15433 / 15434, etc.
 
 **Contexto:** Airflow (Compose), Lambda y pgAdmin en el host usan `host.docker.internal` + puerto override. El secret guarda el IP interno Docker `:5432`. Si el override queda en 15432 y MiniStack publicó otro, DAGs/API fallan al conectar.
 
