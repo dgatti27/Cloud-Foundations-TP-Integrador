@@ -30,7 +30,7 @@ Quedan en la **raíz** a propósito:
 | `infra/**/*.tf` + lockfile | Declaración OpenTofu + versiones de providers |
 | `infra/scripts/post_rds.py` | Seed RDS post-apply |
 | `data/rds/seed_tp.sql` | Schemas bronce/gold + roles |
-| `apps/api/handler.py`, `query_gold.py` | Zip de `tp-gold-api` |
+| `apps/api/` (`handler.py`, `query_gold.py`, `vendor/` con pg8000) | Zip de `tp-gold-api` |
 | `apps/airflow/dags/` (bind mount en runtime) | Stand-in EFS (Hobby) |
 | OpenTofu (`tofu`), AWS CLI, Docker CLI, Python | Runtime del toolbox |
 

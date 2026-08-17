@@ -12,23 +12,26 @@ reproducible con **LocalStack Hobby + MiniStack + MinIO + OpenTofu**.
 Red: **VPC**, subnets privadas, **IAM**, security groups. Cómputo ETL serverless (**Fargate + EFS**).
 
 Guía Docker/toolbox: [`docker/DOCKER.md`](docker/DOCKER.md).  
-Arquitectura: [`docs/`](docs/) · FinOps: [`docs/finops.md`](docs/finops.md) · Decisiones: [`docs/decisions.md`](docs/decisions.md).
+Arquitectura: [`docs/`](docs/) · FinOps: [`docs/finops.md`](docs/finops.md) · Decisiones: [`docs/decisions.md`](docs/decisions.md).  
+IaC (módulos): [`infra/modules/README.md`](infra/modules/README.md).
 
 ## Estructura
 
 ```
 .
 ├── compose.yaml               # runtime local (un solo up -d)
-├── docker/                    # imagen toolbox OpenTofu
+├── docker/                    # imagen toolbox OpenTofu (tp-integrador-iac)
 ├── infra/                     # única fuente IaC (tofu apply)
-│   └── modules/               # iam, vpc, s3, rds, secrets, lambda, ecs, cloudwatch, finops
+│   ├── modules/               # iam, vpc, s3, rds, secrets, lambda, ecs, …
+│   └── scripts/post_rds.py    # seed RDS post-apply
 ├── apps/
-│   ├── pipeline/              # paquete Python ETL (extract/transform/load)
-│   ├── api/                   # Lambda handler + ALB stand-in
+│   ├── pipeline/              # ETL Python + tests + flake8/pytest
+│   ├── api/                   # Lambda + vendor/pg8000 + ALB stand-in
 │   └── airflow/               # DAGs + logs (≈ EFS)
+├── labs/ecs/ecs.py            # opcional: automatiza Compose + trigger DAGs
 ├── data/rds/                  # seed_tp.sql
-├── ops/                       # pgAdmin + scripts
-└── test/                      # evidencia / logs de smoke + IaC
+├── ops/                       # pgAdmin
+└── test/                      # evidencia smoke / IaC
 ```
 
 ## Datos: esquemas y procesamiento
@@ -49,8 +52,9 @@ Lambda tp-gold-api ◄───────────────────�
 (ALB :8088 /gold/query)   solo SELECT (api_reader)
 ```
 
-Orquestación: `python labs/ecs/ecs.py --skip-infra --erp` (o Trigger en la UI Airflow `:8080`).  
-Origen ERP: Compose (`postgres-erp` + seed) · secret `dw/erp`: OpenTofu (`tofu apply`).
+Orquestación: UI Airflow `:8080` **o** atajo `python labs/ecs/ecs.py --skip-infra --erp`.  
+Origen ERP: Compose (`postgres-erp` + seed) · secret `dw/erp`: OpenTofu (`tofu apply`).  
+`ecs.py` **no** es obligatorio para IaC ni para el pipeline (ver §6).
 
 ### Bases y schemas
 
@@ -111,7 +115,20 @@ Detalle del paquete ETL: [`apps/pipeline/README.md`](apps/pipeline/README.md).
 
 # Cómo levantar el proyecto completo
 
-Todo se corre desde la **raíz del repo**. Orden: emuladores → IaC → verificar → runtime (Airflow / API).
+Todo se corre desde la **raíz del repo**. Orden obligatorio:
+
+```text
+0–2  Prereqs + .env + (opcional) pip
+  3  docker compose up -d          ← emuladores + Airflow + ALB + ERP
+  4  tofu apply                    ← IAM/VPC/RDS/secrets/Lambda/seed
+  5  smoke (opcional)
+  6  DAGs camino B                 ← pipeline ERP → bronce → gold
+  7  Postman / curl                ← GET /gold/query
+```
+
+`labs/ecs/ecs.py` es un **atajo** del paso 6 (levanta/triggerea Airflow).  
+Infra = solo `tofu apply`. Pipeline = DAGs. API = ALB `:8088` → Lambda.  
+Empaquetar / correr sin instalar `tofu` en el host: **§8** (imagen `tp-integrador-iac`).
 
 ## 0. Prerequisitos
 
@@ -120,7 +137,7 @@ Todo se corre desde la **raíz del repo**. Orden: emuladores → IaC → verific
 | **Docker Desktop** (o Engine) + Compose v2 | Emuladores, Airflow, ALB, pgAdmin | Sí |
 | Cuenta **LocalStack Hobby** + token | IAM / VPC / Lambda / Logs | Sí |
 | **OpenTofu** (`tofu`) ≥ 1.6 | `cd infra && tofu apply` en el host | No, si usás la imagen toolbox |
-| **Python** 3.11+ + `pip` | Demos ETL/Airflow y checks AWS CLI-like | Recomendado |
+| **Python** 3.11+ + `pip` | `labs/ecs/ecs.py`, smoke/checks y AWS CLI-like | Recomendado (no si solo Compose + toolbox) |
 | **AWS CLI v2** (opcional) | `aws --endpoint-url …` de verificación | No |
 
 **Puertos libres en el host**
@@ -163,7 +180,7 @@ El resto de variables tiene defaults locales (`test`/`test`, `minioadmin`, `post
 
 ## 2. Dependencias Python (host)
 
-Hace falta si vas a correr demos (`ecs`) o `aws` via `awscli-local`.  
+Hace falta si vas a correr `labs/ecs/ecs.py` o checks con `aws`/`awscli-local`.  
 Si solo usás Compose + imagen toolbox, podés saltearlo.
 
 ```bash
@@ -233,7 +250,7 @@ Qué crea el apply (idempotente: el 2º run no debería recrear recursos):
 4. CloudWatch log groups  
 5. RDS `tp-dw-db` en MiniStack + secrets (`dw/rds-master`, `dw/rds-etl`, `dw/rds-api`, `dw/origen-demo`, `dw/erp`)  
 6. Seed SQL (`data/rds/seed_tp.sql`) → schemas bronce/gold + roles `etl_writer` / `api_reader`  
-7. Lambda `tp-gold-api`  
+7. Lambda `tp-gold-api` (zip: handler + query_gold + `apps/api/vendor/` con pg8000)  
 8. Marcadores ECS/EFS Hobby (`apps/airflow/.iac-managed`)  
 9. Inventario FinOps local (Budget AWS solo si `create_budget=true`)
 
@@ -287,13 +304,16 @@ docker compose --profile iac build tp-iac
 # Apply (espera health internos de Compose y corre tofu en /workspace/infra)
 docker compose --profile iac run --rm tp-iac apply
 
-# Plan / output / destroy
+# Plan / output / destroy / shell
 docker compose --profile iac run --rm tp-iac plan
 docker compose --profile iac run --rm tp-iac tofu output
 docker compose --profile iac run --rm tp-iac destroy
+docker compose --profile iac run --rm tp-iac shell
 ```
 
 El state queda en el host: `infra/terraform.tfstate` (volumen bind). No lo commitees.
+
+Detalle de empaquetado y arranque: **§8** y [`docker/DOCKER.md`](docker/DOCKER.md).
 
 ## 5. Verificar que la infra respondió (smoke test)
 
@@ -434,12 +454,12 @@ try { Invoke-RestMethod "http://localhost:8088/gold/query?table=hecho_ventas&lim
 try { Invoke-RestMethod "http://localhost:8088/gold/query?table=dim_cliente&limit=2" } catch { $_.ErrorDetails.Message }
 ```
 
-Esperado **sin ETL**:
+Esperado **sin ETL** (solo cableado):
 
 - `hecho_ventas` → 400 `Tabla no permitida en gold`
-- `dim_cliente` → 200 con filas (driver `pg8000` en `apps/api/vendor/`; requiere `tofu apply` tras el cambio de zip)
+- `dim_cliente` → 200 con `row_count: 0` (o filas si ya corriste el pipeline)
 
-Si sale 502 / función inexistente: no corrió `tofu apply` o LocalStack se recreó sin re-apply.
+Con pipeline (paso 6) → `dim_cliente` / `fact_venta_linea` con filas > 0.
 
 ### 5.6 Idempotencia
 
@@ -449,46 +469,138 @@ cd infra && tofu plan
 
 Esperado: **0 to add, 0 to destroy**. Puede haber 4 `update in-place` cosméticos en descriptions de SG (LocalStack Hobby); no recrea VPC/IAM/RDS/Lambda.
 
-## 6. Runtime: ETL + Airflow + API gold
+## 6. Ejecutar el pipeline (ERP → bronce → gold)
 
-Esquemas, tablas y DAGs: sección **[Datos: esquemas y procesamiento](#datos-esquemas-y-procesamiento)** arriba.
+Prerrequisitos: pasos **3** (Compose healthy) + **4** (`tofu apply` OK).
 
-Compose **ya** tiene Airflow (`:8080`) y ALB stand-in (`:8088`). El IaC dejó roles, RDS, secrets y la Lambda.
+### 6.1 Qué debe existir ya
 
-### 6.1 Origen ERP + secret `dw/erp`
+| Pieza | Quién la creó |
+|-------|----------------|
+| `postgres-erp` con Clientes/Productos/Ventas | Compose + `apps/pipeline/erp/seed_erp.sql` (initdb) |
+| Secret `dw/erp` | `tofu apply` → `modules/secrets` |
+| Secret `dw/rds-etl` + schemas bronce/gold | `tofu apply` + `post_rds.py` / `seed_tp.sql` |
+| Airflow UI `:8080` | Compose (`admin` / `admin`) |
+| DAGs en `apps/airflow/dags/` | montados en el contenedor |
 
-Con el stack ya arriba no hace falta un script demo:
+Si el volumen ERP nació vacío (sin seed), recrealo:
 
-- **Datos:** `postgres-erp` aplica `apps/pipeline/erp/seed_erp.sql` al crear el volumen.
-- **Secret:** `tofu apply` crea `dw/erp` (host `postgres-erp`) en MiniStack.
-
-Si el volumen ERP ya existía vacío, recrealo (`docker compose down` + borrar el volumen `postgres-data-erp`) o aplicá el seed a mano con `psql`.
-
-### 6.2 Orquestación ≈ Fargate (DAGs en EFS stand-in)
-
-Con la infra ya aplicada:
-
-```bash
-python labs/ecs/ecs.py --skip-infra           # camino A: conectividad → bronce
-python labs/ecs/ecs.py --skip-infra --erp     # camino B: ERP → bronce → gold
+```powershell
+docker compose stop postgres-erp
+docker volume rm cloud-foundations-tp-integrador_postgres-data-erp
+# el nombre exacto: docker volume ls | findstr erp
+docker compose up -d postgres-erp
 ```
 
-UI Airflow: http://localhost:8080 (`admin` / `admin`).  
-DAGs: `apps/airflow/dags/` · logs: `apps/airflow/logs/`.  
-Orden camino B: `etl_erp_to_bronce` → `etl_bronce_to_gold`.
+### 6.2 Opción A — UI Airflow (recomendado para entender el flujo)
 
-### 6.3 API gold (Qlik / Postman)
+1. Abrí http://localhost:8080 → login `admin` / `admin`.
+2. Activá (toggle) los DAGs:
+   - `etl_erp_to_bronce`
+   - `etl_bronce_to_gold`
+3. En **`etl_erp_to_bronce`** → Trigger DAG (play). Esperá estado **success**.
+   - Tasks: `ensure_bronce_ddl` → `extract_erp` → `transform_normalize` → `load_bronce`
+4. En **`etl_bronce_to_gold`** → Trigger. Esperá **success**.
+   - Tasks: `extract_bronce` → `transform_to_gold` → `load_gold`
+5. (Opcional) Camino A de conectividad: trigger `etl_rds_comprobation`.
 
-Health del stand-in:
+Logs: UI Airflow o `apps/airflow/logs/`.
 
-```bash
-curl http://localhost:8088/health
+### 6.3 Opción B — atajo `ecs.py` (opcional)
+
+Automatiza Compose Airflow + triggers (no reemplaza `tofu apply`):
+
+```powershell
+$env:AWS_ACCESS_KEY_ID = "test"
+$env:AWS_SECRET_ACCESS_KEY = "test"
+$env:AWS_DEFAULT_REGION = "us-east-1"
+
+python labs/ecs/ecs.py --skip-infra --erp
 ```
 
-Query (después del seed + algún DAG gold; `table` de la allowlist, p. ej. `dim_cliente` / `fact_venta_linea`):
+- `--skip-infra` → asume IaC ya aplicada  
+- `--erp` → camino B (ambos DAGs)  
+- sin `--erp` → solo camino A (`etl_rds_comprobation`)
+
+### 6.4 Verificar datos en gold (SQL / pgAdmin)
+
+http://localhost:5050 → `admin@example.com` / `admin`.
+
+RDS MiniStack: host `host.docker.internal`, puerto `15432` (o el de `docker ps --filter name=ministack-rds`), DB `dw`, user `dwadmin`.  
+Password = JSON de `dw/rds-master`:
+
+```powershell
+aws --endpoint-url http://localhost:4567 secretsmanager get-secret-value `
+  --secret-id dw/rds-master --query SecretString --output text
+```
+
+Ejemplo:
+
+```sql
+SELECT count(*) FROM gold.dim_cliente;
+SELECT count(*) FROM gold.fact_venta_linea;
+```
+
+### 6.5 FinOps (opcional)
 
 ```bash
-curl "http://localhost:8088/gold/query?table=dim_cliente&limit=20"
+python labs/finops/pricing.py --services services.json --budget 300
+```
+
+## 7. Llamar a la API gold (Postman / curl)
+
+Tras el **paso 6** (gold con filas). Cableado: Postman → ALB stand-in `:8088` → Lambda `tp-gold-api` → RDS (`api_reader`).
+
+### 7.1 Health (sin SQL)
+
+| | |
+|--|--|
+| Method | `GET` |
+| URL | `http://localhost:8088/health` |
+
+Esperado: `{"ok":true,"stand_in":"alb","target":"tp-gold-api"}`.
+
+### 7.2 Query gold — Postman
+
+1. Abrí Postman → **New** → **HTTP Request** (o Collection → Add request).
+2. Method: **GET** (no POST; el body no se usa).
+3. Auth: **No Auth**. Headers: ninguno obligatorio.
+4. URL base: `http://localhost:8088/gold/query`
+5. Pestaña **Params** (Query Params):
+
+| Key | Value | Notas |
+|-----|-------|--------|
+| `table` | `dim_cliente` | **Obligatorio.** Solo allowlist gold (no `bronce.*`, no `hecho_ventas`) |
+| `limit` | `20` | Opcional; default bajo, máx. **500** |
+| `columns` | `cliente_sk,nombre` | Opcional (`*` o vacío = todas) |
+| `condition` | `pais=Argentina` | Opcional: `col=valor`, `col!=valor`, `col>valor`, `col LIKE valor` |
+
+6. **Send**.
+
+Esperado tras el paso 6:
+
+- Status **200**
+- Body JSON con `ok: true`, `table`, `row_count` (> 0), `sql_preview`, `rows` (array)
+
+Ejemplos de URL listos para pegar en Postman:
+
+```text
+http://localhost:8088/gold/query?table=dim_cliente&limit=20
+http://localhost:8088/gold/query?table=fact_venta_linea&limit=50
+http://localhost:8088/gold/query?table=dim_producto&columns=producto_sk,nombre,marca&limit=10
+http://localhost:8088/gold/query?table=dim_cliente&condition=pais=Argentina&limit=20
+```
+
+Allowlist: `dim_fecha`, `dim_cliente`, `dim_producto`, `dim_canal`, `dim_metodo_pago`, `dim_moneda`, `fact_venta_linea`, `fact_venta_devolucion`.
+### 7.3 curl / PowerShell
+
+```bash
+curl -s "http://localhost:8088/gold/query?table=dim_cliente&limit=20"
+curl -s "http://localhost:8088/gold/query?table=fact_venta_linea&limit=10"
+```
+
+```powershell
+Invoke-RestMethod "http://localhost:8088/gold/query?table=dim_cliente&limit=20"
 ```
 
 Invoke directo a LocalStack (sin ALB):
@@ -496,36 +608,97 @@ Invoke directo a LocalStack (sin ALB):
 ```bash
 aws --endpoint-url http://localhost:4566 lambda invoke \
   --function-name tp-gold-api \
+  --cli-binary-format raw-in-base64-out \
   --payload "{\"table\":\"dim_cliente\",\"limit\":10}" \
   out-gold.json
 ```
 
-### 6.4 pgAdmin / SQL
+### 7.4 Errores frecuentes API
 
-1. http://localhost:5050 → `admin@example.com` / `admin`
-2. Servers TP Integrador: bronce, dw, erp (password `postgres`)
-3. RDS MiniStack: `host.docker.internal:15432`, DB `dw`, user `dwadmin`  
-   Password = valor de `dw/rds-master` (MiniStack Secrets, consola o AWS CLI)
+| Respuesta | Causa |
+|-----------|--------|
+| 502 | Lambda no aplicada o LocalStack caído → `tofu apply` |
+| 400 `Tabla no permitida` | Nombre fuera de allowlist |
+| 500 `No module named 'pg8000'` | Zip sin `apps/api/vendor/` → re-apply tras vendor |
+| 200 `row_count: 0` | Pipeline no corrió o gold vacío → paso 6 |
+| Timeout / connection | `RDS_HOST_OVERRIDE` / puerto MiniStack incorrecto |
 
-```bash
-aws --endpoint-url http://localhost:4567 secretsmanager get-secret-value \
-  --secret-id dw/rds-master --query SecretString --output text
+## 8. Empaquetar el proyecto en Docker y levantarlo
+
+Hay **dos** capas Docker:
+
+| Capa | Qué es | Cómo |
+|------|--------|------|
+| **Runtime Hobby** | Emuladores + Airflow + ALB + ERP + pgAdmin | `docker compose up -d` (obligatorio) |
+| **Toolbox IaC** | Imagen con OpenTofu + código para `apply` sin instalar `tofu` | build + `docker compose --profile iac run …` (opcional) |
+
+Guía ampliada: [`docker/DOCKER.md`](docker/DOCKER.md).
+
+### 8.1 Empaquetar la imagen toolbox (build)
+
+Desde la **raíz del repo** (context `.`, Dockerfile en `docker/`):
+
+```powershell
+# .env hace falta para el runtime Compose, no para el build en sí
+Copy-Item .env.example .env   # si aún no existe; editá LOCALSTACK_AUTH_TOKEN
+
+# Opción A — Compose (recomendado; profile iac: tp-iac no arranca con up -d)
+docker compose --profile iac build tp-iac
+
+# Opción B — build directo
+docker build -f docker/Dockerfile -t tp-integrador-iac:latest .
 ```
 
-### 6.5 FinOps (estimación local, no es API Budget)
+Qué **incluye** la imagen: OpenTofu, AWS CLI, Python, `infra/`, `data/rds/`, `apps/` (API + `vendor/pg8000`, pipeline, DAGs), scripts (`post_rds`).  
+Qué **no** incluye: `.tfstate`, `.env`, secretos (se montan o inyectan en runtime).
 
-```bash
-python labs/finops/pricing.py --services services.json --budget 300
+Verificación:
+
+```powershell
+docker run --rm tp-integrador-iac:latest help
+docker run --rm --entrypoint tofu tp-integrador-iac:latest version
 ```
 
-## 7. Cleanup
+Rebuild cuando cambies `docker/Dockerfile`, `requirements.txt` o archivos que el build copia. Los `.tf` montados desde `./infra` se ven sin rebuild.
+
+### 8.2 Levantar la imagen / stack y aplicar IaC
+
+```powershell
+# 1) Runtime Hobby (emuladores + Airflow + ALB + …)
+docker compose up -d
+docker compose ps
+# Esperá healthy: localstack-integrador, ministack-integrador, s3-soporte
+
+# 2) Apply con la imagen toolbox (state en el host: infra/terraform.tfstate)
+docker compose --profile iac run --rm tp-iac apply
+
+# Otras acciones del entrypoint
+docker compose --profile iac run --rm tp-iac plan
+docker compose --profile iac run --rm tp-iac tofu output
+docker compose --profile iac run --rm tp-iac destroy
+docker compose --profile iac run --rm tp-iac shell   # bash interactivo
+```
+
+Después: **paso 6** (DAGs) y **paso 7** (Postman), igual que con `tofu` en el host.
+
+### 8.3 Solo runtime Compose (sin toolbox)
+
+Si ya tenés OpenTofu en el host:
+
+```powershell
+docker compose up -d
+cd infra; tofu init; tofu apply
+```
+
+La imagen toolbox es **opcional**; `docker compose up -d` (paso 3) **sí** es obligatorio para Hobby.
+## 9. Cleanup
 
 ```bash
-# Solo recursos declarados en OpenTofu
+# Solo recursos OpenTofu
 cd infra && tofu destroy
 # o: docker compose --profile iac run --rm tp-iac destroy
 
-# Emuladores (sin -v conserva volúmenes MinIO/Postgres/LocalStack)
+# Emuladores (sin -v conserva volúmenes)
 docker compose down
 
 # Reset total de datos locales
@@ -540,12 +713,14 @@ No apliques IaC fuera de [`infra/`](infra/).
 |---------|-----------|
 | `LOCALSTACK_AUTH_TOKEN` missing | `.env` en la **raíz** con el token Hobby |
 | LocalStack / MiniStack timeout | `docker compose ps` / `logs`; esperá **healthy** antes del apply |
-| `BucketAlreadyExists` / role already exists | Restos de corridas anteriores. `tofu destroy` o `compose down -v` y apply limpio |
+| `BucketAlreadyExists` / role already exists | Restos de corridas. `tofu destroy` o `compose down -v` y apply limpio |
 | `post_rds` no encuentra container RDS | MiniStack debe haber creado `tp-dw-db`; `docker ps --filter name=ministack-rds` |
 | Airflow no muestra DAGs | Deben estar en `apps/airflow/dags/`; logs en `apps/airflow/logs/` |
 | `InvalidAccessKeyId` en `s3 ls` | MinIO usa `minioadmin`/`minioadmin`, no `test`/`test` |
 | ALB `:8088` 502 | Lambda aún no aplicada (`tofu apply`) o LocalStack no healthy |
-| `gold/query` → `No module named 'pg8000'` | Reaplicá IaC tras venderizar: el zip debe incluir `apps/api/vendor/`. Rebuild: `pip install -r apps/api/requirements.txt -t apps/api/vendor` |
+| `gold/query` → `No module named 'pg8000'` | Zip debe incluir `apps/api/vendor/`. Rebuild vendor + `tofu apply` |
+| `gold/query` row_count 0 | Corré camino B (paso 6) antes de Postman |
 | pgAdmin no conecta a RDS | Puerto host MiniStack (`docker ps --filter name=ministack-rds`); a veces 15434 ≠ 15432 |
 | Plan con drifts eternos en SG refs | Ya mitigado en HCL (`ignore_changes`); re-aplicá una vez |
 | Symlinks Airflow / Docker build en Windows | No copies `apps/airflow/logs` al build; Compose los monta |
+| Tests pipeline | `pip install -r apps/pipeline/requirements-dev.txt` · `pytest -c apps/pipeline/pytest.ini --rootdir=apps/pipeline` |
