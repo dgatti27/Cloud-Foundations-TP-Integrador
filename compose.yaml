@@ -38,7 +38,8 @@ x-airflow-env: &airflow_env
   AWS_DEFAULT_REGION: us-east-1
   SECRETS_ENDPOINT: http://ministack-integrador:4566
   RDS_HOST_OVERRIDE: host.docker.internal
-  RDS_PORT_OVERRIDE: "15432"
+  # MiniStack puede publicar 15432 / 15433 / 15434 — alineá con `docker ps --filter name=ministack-rds`
+  RDS_PORT_OVERRIDE: "${RDS_PORT_OVERRIDE:-15432}"
   RDS_ETL_SECRET: dw/rds-etl
   ORIGEN_SECRET: dw/origen-demo
   ERP_SECRET: dw/erp

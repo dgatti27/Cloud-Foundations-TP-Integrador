@@ -57,9 +57,10 @@ variable "erp" {
 # Consumo: post_rds.py, ops. NO lo usan DAGs ni Lambda en runtime normal.
 # ---------------------------------------------------------------------------
 resource "aws_secretsmanager_secret" "master" {
-  name        = "dw/rds-master"
-  description = "Master de RDS tp-dw-db — solo bootstrap / admin"
-  tags        = var.tags
+  name                    = "dw/rds-master"
+  description             = "Master de RDS tp-dw-db — solo bootstrap / admin"
+  recovery_window_in_days = 0 # Hobby: borrado inmediato (evita ghosts soft-delete)
+  tags                    = var.tags
 }
 
 resource "aws_secretsmanager_secret_version" "master" {
@@ -80,9 +81,10 @@ resource "aws_secretsmanager_secret_version" "master" {
 # search_path orienta psql a bronce,gold.
 # ---------------------------------------------------------------------------
 resource "aws_secretsmanager_secret" "etl" {
-  name        = "dw/rds-etl"
-  description = "Credencial ETL (ECS): escritura bronce + lectura/escritura gold"
-  tags        = var.tags
+  name                    = "dw/rds-etl"
+  description             = "Credencial ETL (ECS): escritura bronce + lectura/escritura gold"
+  recovery_window_in_days = 0
+  tags                    = var.tags
 }
 
 resource "aws_secretsmanager_secret_version" "etl" {
@@ -103,9 +105,10 @@ resource "aws_secretsmanager_secret_version" "etl" {
 # Consumo: apps/api/query_gold.py (Lambda tp-gold-api).
 # ---------------------------------------------------------------------------
 resource "aws_secretsmanager_secret" "api" {
-  name        = "dw/rds-api"
-  description = "Credencial Lambda API: SELECT solo sobre schema gold"
-  tags        = var.tags
+  name                    = "dw/rds-api"
+  description             = "Credencial Lambda API: SELECT solo sobre schema gold"
+  recovery_window_in_days = 0
+  tags                    = var.tags
 }
 
 resource "aws_secretsmanager_secret_version" "api" {
@@ -126,9 +129,10 @@ resource "aws_secretsmanager_secret_version" "api" {
 # Host típico: postgres-bronce en Compose.
 # ---------------------------------------------------------------------------
 resource "aws_secretsmanager_secret" "origen_demo" {
-  name        = "dw/origen-demo"
-  description = "Origen demo (postgres-bronce)"
-  tags        = var.tags
+  name                    = "dw/origen-demo"
+  description             = "Origen demo (postgres-bronce)"
+  recovery_window_in_days = 0
+  tags                    = var.tags
 }
 
 resource "aws_secretsmanager_secret_version" "origen_demo" {
@@ -148,9 +152,10 @@ resource "aws_secretsmanager_secret_version" "origen_demo" {
 # Host: postgres-erp (red Docker). Consumo: pipeline.extract.erp_foxpro.
 # ---------------------------------------------------------------------------
 resource "aws_secretsmanager_secret" "erp" {
-  name        = "dw/erp"
-  description = "Origen ERP (postgres-erp)"
-  tags        = var.tags
+  name                    = "dw/erp"
+  description             = "Origen ERP (postgres-erp)"
+  recovery_window_in_days = 0
+  tags                    = var.tags
 }
 
 resource "aws_secretsmanager_secret_version" "erp" {

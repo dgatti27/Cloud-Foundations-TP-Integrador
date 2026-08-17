@@ -506,7 +506,8 @@ python labs/ecs/ecs.py --skip-infra --erp
 
 http://localhost:5050 → `admin@example.com` / `admin`.
 
-RDS MiniStack: host `host.docker.internal`, puerto `15432` (o el de `docker ps --filter name=ministack-rds`), DB `dw`, user `dwadmin`.  
+RDS MiniStack: host `host.docker.internal`, puerto el de `docker ps --filter name=ministack-rds` (a menudo `15432`; a veces `15433`/`15434`), DB `dw`, user `dwadmin`.  
+Alineá Airflow y Lambda: `RDS_PORT_OVERRIDE` en `.env` + `rds_port_override` en `infra/terraform.tfvars`, luego recreá Airflow y `tofu apply`.  
 Password = JSON de `dw/rds-master`:
 
 ```powershell
@@ -671,19 +672,63 @@ cd infra; tofu init; tofu apply
 ```
 
 La imagen toolbox es **opcional**; `docker compose up -d` (paso 3) **sí** es obligatorio para Hobby.
+
 ## 9. Cleanup
+
+`tofu destroy` solo saca recursos del state/API. En Hobby **persisten** volúmenes Docker
+(LocalStack, MiniStack, MinIO, disco de la RDS `ministack-rds-*`). Si no los borrás,
+la próxima corrida choca con secrets soft-deleted, roles/buckets huérfanos o schema RDS viejo.
+
+### 9.1 Script recomendado (destroy + wipe emuladores)
+
+Desde la **raíz del repo**:
+
+```powershell
+# Windows
+.\scripts\cleanup-hobby.ps1 -Yes
+
+# Solo Docker/volúmenes (sin tofu destroy)
+.\scripts\cleanup-hobby.ps1 -SkipDestroy -Yes
+
+# También borra postgres ERP/Airflow metastore, redis, pgAdmin
+.\scripts\cleanup-hobby.ps1 -Full -Yes
+```
+
+```bash
+# Linux / macOS / Git Bash
+chmod +x scripts/cleanup-hobby.sh   # una vez
+./scripts/cleanup-hobby.sh --yes
+./scripts/cleanup-hobby.sh --skip-destroy --yes
+./scripts/cleanup-hobby.sh --full --yes
+```
+
+Qué hace el script:
+
+1. `tofu destroy` (imagen `tp-iac` si existe, si no `tofu` en el host)
+2. `docker compose down --remove-orphans`
+3. Elimina sidecars `ministack-rds-*`
+4. Borra volúmenes `localstack-data`, `ministack-data`, `minio-data` y `ministack-rds-*-data`
+5. Con `-Full` / `--full`: también `postgres-*`, `redis-data`, `pgadmin-data`
+
+No borra `.env` ni el archivo de state a mano (el destroy ya lo deja vacío/consistente).
+
+Después, arranque limpio: paso **3** (`compose up`) + paso **4** (`tofu apply`).
+
+### 9.2 Manual (equivalente corto)
 
 ```bash
 # Solo recursos OpenTofu
 cd infra && tofu destroy
 # o: docker compose --profile iac run --rm tp-iac destroy
 
-# Emuladores (sin -v conserva volúmenes)
+# Emuladores (sin -v conserva volúmenes → riesgo de ghosts)
 docker compose down
 
-# Reset total de datos locales
+# Reset total de datos Compose (incluye ERP seed, Airflow DB, etc.)
 # docker compose down -v
 ```
+
+Además, los secrets IaC usan `recovery_window_in_days = 0` (Hobby) para que un destroy no deje nombres reservados 30 días.
 
 No apliques IaC fuera de [`infra/`](infra/).
 
@@ -693,7 +738,9 @@ No apliques IaC fuera de [`infra/`](infra/).
 |---------|-----------|
 | `LOCALSTACK_AUTH_TOKEN` missing | `.env` en la **raíz** con el token Hobby |
 | LocalStack / MiniStack timeout | `docker compose ps` / `logs`; esperá **healthy** antes del apply |
-| `BucketAlreadyExists` / role already exists | Restos de corridas. `tofu destroy` o `compose down -v` y apply limpio |
+| `BucketAlreadyExists` / role already exists | Restos de corridas. `.\scripts\cleanup-hobby.ps1 -Yes` (o `--yes`) y apply limpio |
+| Secretos `ResourceExistsException` (lista vacía) | Ghosts soft-delete MiniStack → cleanup-hobby (wipe `ministack-data`) |
+| Schema RDS viejo / falta columna `pais` | Volumen `ministack-rds-*-data` stale → cleanup-hobby y re-apply |
 | `post_rds` no encuentra container RDS | MiniStack debe haber creado `tp-dw-db`; `docker ps --filter name=ministack-rds` |
 | Airflow no muestra DAGs | Deben estar en `apps/airflow/dags/`; logs en `apps/airflow/logs/` |
 | `InvalidAccessKeyId` en `s3 ls` | MinIO usa `minioadmin`/`minioadmin`, no `test`/`test` |

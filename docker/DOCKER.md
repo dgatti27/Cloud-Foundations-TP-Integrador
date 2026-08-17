@@ -194,12 +194,24 @@ Host                         Docker network (compose)
 
 ## Cleanup
 
+Recomendado (destroy IaC + wipe volúmenes de emuladores):
+
+```bash
+# desde la raíz del repo
+./scripts/cleanup-hobby.sh --yes
+# Windows: .\scripts\cleanup-hobby.ps1 -Yes
+```
+
+Manual:
+
 ```bash
 docker compose --profile iac run --rm tp-iac destroy
 
 docker compose down
 # docker compose down -v   # solo si querés reset total (borra datos)
 ```
+
+Detalle: [`../README.md`](../README.md) §9.
 
 ---
 

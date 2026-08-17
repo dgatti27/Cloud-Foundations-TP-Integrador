@@ -28,7 +28,11 @@ jobs:
       - name: Instalar dependencias ETL
         run: pip install -r apps/pipeline/requirements-dev.txt
       - name: Lint (ruff, errores reales)
-        run: ruff check --select E9,F63,F7,F82 apps/pipeline apps/airflow/dags apps/api
+        # Excluir apps/api/vendor (pg8000 y deps empaquetadas; no son código del TP).
+        run: >
+          ruff check --select E9,F63,F7,F82
+          --exclude apps/api/vendor
+          apps/pipeline apps/airflow/dags apps/api
       - name: Lint (flake8 pipeline)
         run: flake8 --config apps/pipeline/.flake8 apps/pipeline
       - name: Compilar (py_compile)
@@ -91,7 +95,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          mapfile -t files < <(git ls-files 'docker/*.sh' 'ops/scripts/*.sh')
+          mapfile -t files < <(git ls-files 'docker/*.sh' 'ops/scripts/*.sh' 'scripts/*.sh')
           if ((${#files[@]} == 0)); then
             echo "No hay scripts de producto para ShellCheck"
             exit 0
