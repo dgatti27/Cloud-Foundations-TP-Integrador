@@ -28,6 +28,7 @@
 ## 1. Resumen ejecutivo
 
 Este plan detalla la migración de la base de datos **Datawarehouse (DW)** de la empresa, hoy alojada en un servidor de hosting compartido, hacia una arquitectura gestionada y de alta disponibilidad en AWS.
+Vale la pena mencionar que es una versión reducida del escenario real, aplicable para el TP Integrador.
 
 El DW se alimenta mediante ETL escritos en **Python** que corren sobre **Airflow dockerizado**, con información desde cuatro orígenes:
 
@@ -187,20 +188,5 @@ El corte a producción sigue una secuencia de bajo riesgo, con ensayo previo y v
 ## 9. Servicios AWS utilizados
 
 La arquitectura usa **8 servicios core**, cada uno con una función concreta: **IAM, VPC, ECS Fargate, EFS, RDS, ELB (ALB), Lambda y S3**, más **Secrets Manager** y **CloudWatch** como soporte.
-
-## Estructura del repositorio
-
-```text
-.
-├── README.md                 # Este documento
-├── assets/                   # Diagramas (as-is, to-be, Gantt)
-│   ├── arquitectura-as-is.png
-│   ├── arquitectura-to-be.png
-│   └── gantt-migracion.png
-├── finops/                   # Estimador de costos
-│   
-└── iac/                      # Provisioning reproducible
-   
-```
 
 **Entregables del proyecto:** este plan (arquitectura, Gantt, costos y justificaciones), los diagramas as-is/to-be, el estimador de costos (`finops/`) y los scripts de provisioning reproducibles (`iac/`).
