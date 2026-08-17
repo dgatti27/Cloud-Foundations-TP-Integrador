@@ -36,26 +36,6 @@ IaC (módulos): [`infra/modules/README.md`](infra/modules/README.md).
 
 ## Datos: esquemas y procesamiento
 
-### Flujo (camino ERP)
-
-```text
-postgres-erp          Airflow (≈ Fargate + EFS)              RDS MiniStack (db dw)
-(Compose :5434)       apps/airflow/dags/                     schemas bronce + gold
-─────────────────     ──────────────────────────            ─────────────────────
-Clientes              etl_erp_to_bronce                     bronce.erp_*
-Productos    ──────►  extract → normalize → load   ──────►  bronce.ingest_batch
-Ventas                                                      │
-                      etl_bronce_to_gold                    ▼
-                      extract → to_gold → load     ──────►  gold.dim_* / fact_*
-                                                            │
-Lambda tp-gold-api ◄────────────────────────────────────────┘
-(ALB :8088 /gold/query)   solo SELECT (api_reader)
-```
-
-Orquestación: UI Airflow `:8080` **o** atajo `python labs/ecs/ecs.py --skip-infra --erp`.  
-Origen ERP: Compose (`postgres-erp` + seed) · secret `dw/erp`: OpenTofu (`tofu apply`).  
-`ecs.py` **no** es obligatorio para IaC ni para el pipeline (ver §6).
-
 ### Bases y schemas
 
 | Dónde | Rol | Quién escribe | Quién lee |
