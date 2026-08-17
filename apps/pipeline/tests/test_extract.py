@@ -8,12 +8,12 @@ import pytest
 from pipeline.extract.erp_foxpro import extract_erp, extract_erp_all
 from pipeline.extract.from_bronce import extract_bronce, extract_bronce_all
 
-
+#Test para verificar que se lanza un error cuando se intenta extraer una tabla desconocida.
 def test_extract_erp_tabla_desconocida():
     with pytest.raises(ValueError, match="desconocida"):
         extract_erp("inventada")
 
-
+#Test para verificar que se usa el secret correcto y se devuelven las filas correctamente.
 @patch("pipeline.extract.erp_foxpro.fetch_dicts")
 @patch("pipeline.extract.erp_foxpro.connect")
 @patch("pipeline.extract.erp_foxpro.source_conn")
@@ -21,7 +21,7 @@ def test_extract_erp_usa_secret_y_devuelve_filas(mock_src, mock_connect, mock_fe
     mock_src.return_value = {"host": "postgres-erp", "username": "postgres", "password": "x", "dbname": "erp"}
     mock_connect.return_value = MagicMock()
     mock_fetch.return_value = [{"id_cliente": 1, "nombre": "Ana"}]
-
+    #Test para verificar que se usa el secret correcto y se devuelven las filas correctamente.
     rows = extract_erp("clientes")
 
     assert rows == [{"id_cliente": 1, "nombre": "Ana"}]
@@ -29,7 +29,7 @@ def test_extract_erp_usa_secret_y_devuelve_filas(mock_src, mock_connect, mock_fe
     mock_fetch.assert_called_once()
     mock_connect.return_value.close.assert_called_once()
 
-
+#Test para verificar que se extraen todas las tablas correctamente.
 @patch("pipeline.extract.erp_foxpro.extract_erp")
 def test_extract_erp_all_tres_tablas(mock_one):
     mock_one.side_effect = lambda name, **_: [{"tabla": name}]
@@ -37,12 +37,12 @@ def test_extract_erp_all_tres_tablas(mock_one):
     assert set(out) == {"clientes", "productos", "ventas"}
     assert mock_one.call_count == 3
 
-
+#Test para verificar que se lanza un error cuando se intenta extraer una tabla desconocida.
 def test_extract_bronce_tabla_desconocida():
     with pytest.raises(ValueError, match="desconocida"):
         extract_bronce("xyz")
 
-
+#Test para verificar que se usa el secret correcto y se devuelven las filas correctamente.
 @patch("pipeline.extract.from_bronce.fetch_dicts")
 @patch("pipeline.extract.from_bronce.connect")
 @patch("pipeline.extract.from_bronce.rds_etl_conn")
@@ -55,7 +55,7 @@ def test_extract_bronce_mock(mock_rds, mock_connect, mock_fetch):
     assert rows[0]["id_venta"] == 1
     mock_connect.return_value.close.assert_called_once()
 
-
+#Test para verificar que se extraen todas las tablas correctamente.
 @patch("pipeline.extract.from_bronce.extract_bronce")
 def test_extract_bronce_all(mock_one):
     mock_one.side_effect = lambda name, **_: []

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pipeline.transform.to_gold import transform_to_gold
 
-
+#Test para verificar que se transforman todas las tablas correctamente.
 def test_transform_to_gold_bundle_vacio():
     bundle = transform_to_gold([], [], [])
     assert set(bundle) == {
@@ -17,7 +17,7 @@ def test_transform_to_gold_bundle_vacio():
     }
     assert bundle["fact_venta_linea"] == []
 
-
+#Test para verificar que se transforman todas las tablas correctamente.
 def test_transform_to_gold_mapea_dims_y_fact(mock_cliente, mock_producto, mock_venta):
     bundle = transform_to_gold([mock_cliente], [mock_producto], [mock_venta])
 

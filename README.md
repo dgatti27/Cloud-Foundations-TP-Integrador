@@ -29,6 +29,7 @@ IaC (módulos): [`infra/modules/README.md`](infra/modules/README.md).
 │   ├── api/                   # Lambda + vendor/pg8000 + ALB stand-in
 │   └── airflow/               # DAGs + logs (≈ EFS)
 ├── labs/ecs/ecs.py            # opcional: automatiza Compose + trigger DAGs
+├── scripts/                   # cleanup-hobby, sync-rds-port
 ├── data/rds/                  # seed_tp.sql
 ├── ops/                       # pgAdmin
 └── test/                      # evidencia smoke / IaC
@@ -101,9 +102,32 @@ Todo se corre desde la **raíz del repo**. Orden obligatorio:
 0–2  Prereqs + .env + (opcional) pip
   3  docker compose up -d          ← emuladores + Airflow + ALB + ERP
   4  tofu apply                    ← IAM/VPC/RDS/secrets/Lambda/seed
+ 4b  sync-rds-port                 ← alinea puerto MiniStack en .env + Lambda
   5  smoke (opcional)
   6  DAGs camino B                 ← pipeline ERP → bronce → gold
   7  Postman / curl                ← GET /gold/query
+  9  cleanup-hobby (bajar todo)    ← destroy + wipe volúmenes emuladores
+```
+
+**Arranque limpio (después de cleanup o primera vez):**
+
+```powershell
+# Windows — desde la raíz del repo
+Remove-Item Env:LOCALSTACK_AUTH_TOKEN -ErrorAction SilentlyContinue   # evita token corto del shell
+docker compose up -d
+docker compose --profile iac run --rm tp-iac apply
+.\scripts\sync-rds-port.ps1 -RecreateAirflow
+docker compose --profile iac run --rm tp-iac apply   # solo si sync cambió el puerto
+# luego paso 6 (DAGs) y paso 7 (API)
+```
+
+```bash
+# Linux / macOS / Git Bash
+unset LOCALSTACK_AUTH_TOKEN
+docker compose up -d
+docker compose --profile iac run --rm tp-iac apply
+./scripts/sync-rds-port.sh --recreate-airflow
+docker compose --profile iac run --rm tp-iac apply   # solo si sync cambió el puerto
 ```
 
 `labs/ecs/ecs.py` es un **atajo** del paso 6 (levanta/triggerea Airflow).  
@@ -128,7 +152,7 @@ Empaquetar / correr sin instalar `tofu` en el host: **§8** (imagen `tp-integrad
 | 4567 | MiniStack (RDS + Secrets) |
 | 9000 / 9001 | MinIO API / consola |
 | 5432 / 5433 / 5434 | postgres-bronce / dw / erp |
-| 15432 | Postgres real de MiniStack (RDS) |
+| 15432–15434 | Postgres real de MiniStack (RDS; puerto dinámico) |
 | 8080 | Airflow UI |
 | 8088 | ALB stand-in → Lambda |
 | 5050 | pgAdmin |
@@ -157,6 +181,14 @@ LOCALSTACK_AUTH_TOKEN=ls-...
 
 Sin ese valor `docker compose up` falla (`LOCALSTACK_AUTH_TOKEN:?Set …`).  
 El resto de variables tiene defaults locales (`test`/`test`, `minioadmin`, `postgres`/`postgres`).
+
+**Windows:** si tenés `LOCALSTACK_AUTH_TOKEN` exportado en el shell (token corto viejo), borralo antes del `compose up` para que Compose use solo `.env`:
+
+```powershell
+Remove-Item Env:LOCALSTACK_AUTH_TOKEN -ErrorAction SilentlyContinue
+```
+
+`RDS_PORT_OVERRIDE` en `.env` se sincroniza automáticamente en el **paso 4b** (`scripts/sync-rds-port.*`); no hace falta editarlo a mano salvo diagnóstico.
 
 ## 2. Dependencias Python (host)
 
@@ -216,7 +248,7 @@ Si `airflow-webserver` no arranca, mirá: `docker compose logs airflow-init`.
 | http://localhost:4567 | — | MiniStack (RDS API + Secrets) |
 
 pgAdmin trae servers prearmados: bronce, dw (metastore Airflow), erp.  
-RDS MiniStack (`host.docker.internal:15432`, user `dwadmin`) aparece después del `tofu apply`; la password es el secret `dw/rds-master` (no va en pgpass).
+RDS MiniStack (`host.docker.internal`, user `dwadmin`) aparece después del `tofu apply`; el **puerto host** lo asigna MiniStack (suele ser `15432`, a veces `15433`/`15434`) — ver **paso 4b**. La password es el secret `dw/rds-master` (no va en pgpass).
 
 ## 4. Aplicar la infraestructura (OpenTofu)
 
@@ -263,14 +295,11 @@ Defaults relevantes: `enable_ecs_api=false` (Hobby), `apply_rds_seed=true`, `cre
 
 Si LocalStack/MiniStack aún no están healthy, el apply falla (timeouts RDS/IAM). Volvé al paso 3.
 
-Si **ya existían** roles/buckets/RDS de corridas anteriores:
+Si **ya existían** roles/buckets/RDS de corridas anteriores, usá el script de cleanup (§9) en lugar de un `down` a medias:
 
-```bash
-# Limpiá emuladores (CUIDADO: -v borra volúmenes) o destruí state viejo
-docker compose down
-# docker compose down -v    # reset total de datos
-docker compose up -d
-cd infra && tofu apply
+```powershell
+.\scripts\cleanup-hobby.ps1 -Yes
+# luego pasos 3 → 4 → 4b
 ```
 
 ### Opción B — Imagen toolbox (sin instalar `tofu`)
@@ -295,9 +324,49 @@ El state queda en el host: `infra/terraform.tfstate` (volumen bind). No lo commi
 
 Detalle de empaquetado y arranque: **§8** y [`docker/DOCKER.md`](docker/DOCKER.md).
 
+## 4b. Sincronizar puerto RDS (MiniStack)
+
+**Obligatorio** después del primer `tofu apply` (y tras cada cleanup/re-apply).  
+MiniStack levanta un sidecar `ministack-rds-*-tp-dw-db` con un **puerto host dinámico**. Airflow (ETL) y Lambda (API) deben apuntar al mismo puerto vía `RDS_PORT_OVERRIDE` / `rds_port_override`.
+
+```powershell
+# Windows
+.\scripts\sync-rds-port.ps1 -RecreateAirflow
+```
+
+```bash
+# Linux / macOS / Git Bash
+chmod +x scripts/sync-rds-port.sh   # una vez
+./scripts/sync-rds-port.sh --recreate-airflow
+```
+
+Qué hace el script:
+
+1. Lee el puerto de `docker ps --filter name=ministack-rds`
+2. Escribe `RDS_PORT_OVERRIDE` en `.env`
+3. Escribe `rds_port_override` en `infra/terraform.tfvars`
+4. Con `-RecreateAirflow` / `--recreate-airflow`: recrea scheduler + webserver de Airflow
+
+Si el puerto **cambió** respecto al apply anterior, re-aplicá la Lambda:
+
+```bash
+docker compose --profile iac run --rm tp-iac apply
+# o: cd infra && tofu apply
+```
+
+**Síntoma si omitís este paso:** DAGs fallan al conectar a RDS; `GET /gold/query` responde error de conexión a `host.docker.internal:15433` (u otro puerto viejo) aunque `/health` siga en 200.
+
+Verificación manual (opcional):
+
+```bash
+docker ps --filter name=ministack-rds --format "{{.Names}}  {{.Ports}}"
+grep RDS_PORT_OVERRIDE .env
+grep rds_port_override infra/terraform.tfvars
+```
+
 ## 5. Verificar que la infra respondió (smoke test)
 
-Correr **después** de `docker compose up -d` + `tofu apply`. No hace falta ETL.  
+Correr **después** de `docker compose up -d` + `tofu apply` + **paso 4b**. No hace falta ETL.  
 Evidencia smoke: [`test/2026-08-13-smoke/`](test/2026-08-13-smoke/).  
 Errores de IaC: `.\test\capture-apply.ps1` → [`test/iac-runs/`](test/iac-runs/) (`*-FAIL/` + `tofu.log`). Smoke: `.\test\capture-smoke.ps1`.
 
@@ -323,7 +392,7 @@ docker ps --filter name=ministack-rds --format "{{.Names}}  {{.Ports}}  {{.Statu
 ```
 
 Esperado: `localstack-integrador`, `ministack-integrador`, `s3-soporte` **healthy**; Airflow `:8080`, ALB `:8088`, pgAdmin `:5050` **Up**.  
-El Postgres de MiniStack (`ministack-rds-…-tp-dw-db`) publica un puerto en el host (a veces **15432**, a veces **15434**): anotalo para pgAdmin / `rds_port_override`.
+El sidecar `ministack-rds-…-tp-dw-db` debe estar **Up** con un puerto tipo `0.0.0.0:15432->5432/tcp`. Ese número debe coincidir con `.env` y `terraform.tfvars` (paso **4b**).
 
 ### 5.2 Outputs OpenTofu
 
@@ -451,7 +520,7 @@ Esperado: **0 to add, 0 to destroy**. Puede haber `update in-place` cosméticos 
 
 ## 6. Ejecutar el pipeline (ERP → bronce → gold)
 
-Prerrequisitos: pasos **3** (Compose healthy) + **4** (`tofu apply` OK).
+Prerrequisitos: pasos **3** (Compose healthy) + **4** (`tofu apply` OK) + **4b** (`sync-rds-port`).
 
 ### 6.1 Qué debe existir ya
 
@@ -506,8 +575,7 @@ python labs/ecs/ecs.py --skip-infra --erp
 
 http://localhost:5050 → `admin@example.com` / `admin`.
 
-RDS MiniStack: host `host.docker.internal`, puerto el de `docker ps --filter name=ministack-rds` (a menudo `15432`; a veces `15433`/`15434`), DB `dw`, user `dwadmin`.  
-Alineá Airflow y Lambda: `RDS_PORT_OVERRIDE` en `.env` + `rds_port_override` en `infra/terraform.tfvars`, luego recreá Airflow y `tofu apply`.  
+RDS MiniStack: host `host.docker.internal`, puerto = el de `docker ps --filter name=ministack-rds` (debe coincidir con el paso **4b**), DB `dw`, user `dwadmin`.  
 Password = JSON de `dw/rds-master`:
 
 ```powershell
@@ -617,7 +685,7 @@ aws --endpoint-url http://localhost:4566 lambda invoke \
 | 400 `Tabla no permitida` | Nombre fuera de allowlist |
 | 500 `No module named 'pg8000'` | Zip sin `apps/api/vendor/` → re-apply tras vendor |
 | 200 `row_count: 0` | Pipeline no corrió o gold vacío → paso 6 |
-| Timeout / connection | `RDS_HOST_OVERRIDE` / puerto MiniStack incorrecto |
+| 500 connection / `InterfaceError` puerto | Omitiste paso **4b** o Lambda con puerto viejo → `sync-rds-port` + `tofu apply` |
 
 ## 8. Empaquetar el proyecto en Docker y levantarlo
 
@@ -668,6 +736,10 @@ docker compose ps
 # 2) Apply con la imagen toolbox (state en el host: infra/terraform.tfstate)
 docker compose --profile iac run --rm tp-iac apply
 
+# 3) Puerto RDS dinámico → .env + Airflow + (si cambió) Lambda
+.\scripts\sync-rds-port.ps1 -RecreateAirflow
+docker compose --profile iac run --rm tp-iac apply   # solo si sync cambió el puerto
+
 # Otras acciones del entrypoint
 docker compose --profile iac run --rm tp-iac plan
 docker compose --profile iac run --rm tp-iac tofu output
@@ -684,6 +756,8 @@ Si ya tenés OpenTofu en el host:
 ```powershell
 docker compose up -d
 cd infra; tofu init; tofu apply
+.\scripts\sync-rds-port.ps1 -RecreateAirflow
+cd ..; docker compose --profile iac run --rm tp-iac apply   # o tofu apply en host, si cambió puerto
 ```
 
 La imagen toolbox es **opcional**; `docker compose up -d` (paso 3) **sí** es obligatorio para Hobby.
@@ -727,7 +801,16 @@ Qué hace el script:
 
 No borra `.env` ni el archivo de state a mano (el destroy ya lo deja vacío/consistente).
 
-Después, arranque limpio: paso **3** (`compose up`) + paso **4** (`tofu apply`).
+Después, arranque limpio:
+
+```powershell
+docker compose up -d
+docker compose --profile iac run --rm tp-iac apply
+.\scripts\sync-rds-port.ps1 -RecreateAirflow
+docker compose --profile iac run --rm tp-iac apply   # si sync cambió el puerto
+```
+
+(pasos **3**, **4**, **4b** del checklist principal).
 
 ### 9.2 Manual (equivalente corto)
 
@@ -752,17 +835,20 @@ No apliques IaC fuera de [`infra/`](infra/).
 | Síntoma | Qué hacer |
 |---------|-----------|
 | `LOCALSTACK_AUTH_TOKEN` missing | `.env` en la **raíz** con el token Hobby |
+| LocalStack exit 55 / token inválido | `Remove-Item Env:LOCALSTACK_AUTH_TOKEN` (Windows) y usá solo `.env` |
 | LocalStack / MiniStack timeout | `docker compose ps` / `logs`; esperá **healthy** antes del apply |
 | `BucketAlreadyExists` / role already exists | Restos de corridas. `.\scripts\cleanup-hobby.ps1 -Yes` (o `--yes`) y apply limpio |
 | Secretos `ResourceExistsException` (lista vacía) | Ghosts soft-delete MiniStack → cleanup-hobby (wipe `ministack-data`) |
 | Schema RDS viejo / falta columna `pais` | Volumen `ministack-rds-*-data` stale → cleanup-hobby y re-apply |
 | `post_rds` no encuentra container RDS | MiniStack debe haber creado `tp-dw-db`; `docker ps --filter name=ministack-rds` |
+| DAGs fallan conexión RDS / API puerto incorrecto | Paso **4b**: `.\scripts\sync-rds-port.ps1 -RecreateAirflow` + `tofu apply` |
 | Airflow no muestra DAGs | Deben estar en `apps/airflow/dags/`; logs en `apps/airflow/logs/` |
 | `InvalidAccessKeyId` en `s3 ls` | MinIO usa `minioadmin`/`minioadmin`, no `test`/`test` |
 | ALB `:8088` 502 | Lambda aún no aplicada (`tofu apply`) o LocalStack no healthy |
 | `gold/query` → `No module named 'pg8000'` | Zip debe incluir `apps/api/vendor/`. Rebuild vendor + `tofu apply` |
 | `gold/query` row_count 0 | Corré camino B (paso 6) antes de Postman |
-| pgAdmin no conecta a RDS | Puerto host MiniStack (`docker ps --filter name=ministack-rds`); a veces 15434 ≠ 15432 |
+| pgAdmin no conecta a RDS | Mismo puerto que paso **4b**; host `host.docker.internal` |
+| `tofu apply` falla en Windows/OneDrive | Usá toolbox: `docker compose --profile iac run --rm tp-iac apply` |
 | Plan con drifts eternos en SG refs | Ya mitigado en HCL (`ignore_changes`); re-aplicá una vez |
 | Symlinks Airflow / Docker build en Windows | No copies `apps/airflow/logs` al build; Compose los monta |
 | Tests pipeline | `pip install -r apps/pipeline/requirements-dev.txt` · `pytest -c apps/pipeline/pytest.ini --rootdir=apps/pipeline` |

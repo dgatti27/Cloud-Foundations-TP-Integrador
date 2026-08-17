@@ -6,16 +6,16 @@ from unittest.mock import MagicMock, patch
 from pipeline.load.to_cruda import load_erp_to_bronce, load_to_cruda
 from pipeline.load.to_dw import load_gold_bundle, load_to_dw
 
-
+#Test para verificar que no se escribe en la base de datos cuando se carga a cruda.
 def test_load_to_cruda_legacy_no_escribe_db():
     n = load_to_cruda([{"origen": "demo", "payload": {"x": 1}}], "demo")
     assert n == 1
 
-
+#Test para verificar que no se hace nada cuando se carga a dw.
 def test_load_to_dw_legacy_noop():
     assert load_to_dw() == 0
 
-
+#Test para verificar que se hace un upsert cuando se carga a bronce.
 @patch("pipeline.load.to_cruda.connect")
 @patch("pipeline.load.to_cruda.rds_etl_conn")
 @patch("pipeline.load.to_cruda.DDL_PATH")
@@ -63,10 +63,11 @@ def test_load_erp_to_bronce_upsert_mock(mock_ddl_path, mock_rds, mock_connect):
     conn.commit.assert_called()
     conn.close.assert_called()
 
-
+#Test para verificar que se carga a dw correctamente. 
 @patch("pipeline.load.to_dw.connect")
 @patch("pipeline.load.to_dw.rds_etl_conn")
 def test_load_gold_bundle_mock(mock_rds, mock_connect, mock_cliente, mock_producto, mock_venta):
+    #Importamos transform_to_gold para mockearlo.
     from pipeline.transform.to_gold import transform_to_gold
 
     mock_rds.return_value = {"dsn": "postgresql://x"}

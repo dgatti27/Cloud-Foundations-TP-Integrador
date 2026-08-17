@@ -119,6 +119,19 @@ Qué hace el container:
 3. Crea IAM → VPC → S3(MinIO) → CloudWatch → RDS → Secrets → seed SQL → Lambda → marcadores ECS/EFS
 4. Persiste el **state** en `./infra/terraform.tfstate` (host)
 
+### 2b) Sincronizar puerto RDS (después del apply)
+
+MiniStack publica la RDS en un puerto host dinámico (`15432`, `15433`, …). Sincronizá `.env`, Airflow y Lambda:
+
+```bash
+./scripts/sync-rds-port.sh --recreate-airflow
+docker compose --profile iac run --rm tp-iac apply   # solo si el puerto cambió
+```
+
+Windows: `.\scripts\sync-rds-port.ps1 -RecreateAirflow`
+
+Detalle: [`../README.md`](../README.md) §4b.
+
 ### 3) Verificar
 
 ```bash
@@ -213,6 +226,8 @@ docker compose down
 
 Detalle: [`../README.md`](../README.md) §9.
 
+Tras cleanup, arranque limpio: `compose up` → `apply` → `sync-rds-port` → `apply` (si cambió puerto).
+
 ---
 
 ## Troubleshooting
@@ -223,6 +238,7 @@ Detalle: [`../README.md`](../README.md) §9.
 | timeout LocalStack/MiniStack | `docker compose ps` / logs; esperá healthy |
 | `BucketAlreadyExists` / roles ya existen | `tofu import` / destroy+apply, o `apply-reconcile` |
 | `post_rds` no encuentra container RDS | `docker.sock` montado; MiniStack levantó `tp-dw-db` |
+| DAG/API no conectan a RDS (puerto viejo) | `./scripts/sync-rds-port.sh --recreate-airflow` + re-apply |
 | endpoints malos desde el container | Usá `docker compose --profile iac run` (DNS internos); no mezcles `:4567` dentro de la red |
 | plan con drifts eternos | Ya mitigado en HCL (lifecycle LocalStack); corré `plan` de nuevo tras un apply limpio |
 

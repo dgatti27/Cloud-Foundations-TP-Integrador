@@ -11,7 +11,7 @@ _APPS = Path(__file__).resolve().parents[2]
 if str(_APPS) not in sys.path:
     sys.path.insert(0, str(_APPS))
 
-
+#Fixtures para mockear datos de prueba.
 @pytest.fixture
 def mock_cliente() -> dict:
     return {
@@ -28,7 +28,7 @@ def mock_cliente() -> dict:
         "fecha_alta": "2023-01-10",
     }
 
-
+#Fixture para mockear datos de prueba de producto.
 @pytest.fixture
 def mock_producto() -> dict:
     return {
@@ -44,7 +44,7 @@ def mock_producto() -> dict:
         "fecha_alta": "2023-01-01",
     }
 
-
+#Fixture para mockear datos de prueba de venta.
 @pytest.fixture
 def mock_venta() -> dict:
     return {
@@ -67,7 +67,7 @@ def mock_venta() -> dict:
         "batch_id": 1,
     }
 
-
+#Fixture para mockear datos de prueba de bundle ERP.
 @pytest.fixture
 def mock_erp_bundle(mock_cliente, mock_producto, mock_venta) -> dict:
     return {

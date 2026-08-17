@@ -152,6 +152,7 @@ Cleanup listo.
 Próximo arranque limpio:
   docker compose up -d
   docker compose --profile iac run --rm tp-iac apply
-  # o: cd infra && tofu apply
+  ./scripts/sync-rds-port.sh --recreate-airflow
+  docker compose --profile iac run --rm tp-iac apply   # si cambió el puerto RDS
 
 EOF

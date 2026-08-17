@@ -156,5 +156,6 @@ Write-Host "Cleanup listo." -ForegroundColor Green
 Write-Host "Proximo arranque limpio:"
 Write-Host "  docker compose up -d"
 Write-Host "  docker compose --profile iac run --rm tp-iac apply"
-Write-Host "  # o: cd infra; tofu apply"
+Write-Host "  .\scripts\sync-rds-port.ps1 -RecreateAirflow"
+Write-Host "  docker compose --profile iac run --rm tp-iac apply   # si cambió el puerto RDS"
 Write-Host ""
