@@ -27,6 +27,7 @@ name: cloud-foundations-tp-integrador
 x-airflow-env: &airflow_env
   AIRFLOW__CORE__EXECUTOR: LocalExecutor
   AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres-dw:5432/gold
   AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
   PYTHONPATH: /opt/airflow/packages

@@ -20,8 +20,9 @@ Orden de tasks (obligatorio)
 
 Cómo dispararlo
 ---------------
-  schedule=None → solo manual (UI Airflow o CLI).
-  Después de OK, correr `etl_bronce_to_gold` (grupo 2).
+  schedule="@once" → una corrida automática cuando el scheduler arranca
+  (espera RDS/secrets en `wait_for_infra`). Al terminar OK dispara
+  `etl_bronce_to_gold`. También podés trigger manual desde la UI.
 
 default_args
 ------------
@@ -33,12 +34,41 @@ from datetime import datetime
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 
 # ---------------------------------------------------------------------------
 # Tasks — cada una importa pipeline *dentro* de la función
 # (evita fallar el parseo del DAG si el worker aún no tiene deps listas)
 # ---------------------------------------------------------------------------
+def task_wait_for_infra(**_):
+    """Espera a que existan secrets + RDS tras `tofu apply` (poll cada 15 s)."""
+    import time
+
+    from pipeline.config import from_secrets, rds_etl_conn, source_conn
+    from pipeline.db import connect
+
+    deadline = time.time() + 900
+    last_err: Exception | None = None
+    while time.time() < deadline:
+        try:
+            from_secrets("dw/rds-etl")
+            from_secrets("dw/erp")
+            with connect(rds_etl_conn()) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+            with connect(source_conn("erp")) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+            print("Infra lista (secrets + RDS + ERP)")
+            return
+        except Exception as exc:
+            last_err = exc
+            print(f"Infra aún no lista ({exc}); reintento en 15 s…")
+            time.sleep(15)
+    raise TimeoutError(f"Infra no disponible tras 15 min: {last_err}")
+
+
 def task_ensure_ddl(**_):
     """Crea tablas bronce.erp_* / ingest_batch si no existen (DDL idempotente)."""
     from pipeline.load.to_cruda import ensure_bronce_erp_ddl
@@ -119,21 +149,28 @@ def _deserialize(tables: dict) -> dict:
 # Definición del DAG
 # ---------------------------------------------------------------------------
 # start_date  → desde cuándo Airflow considera el DAG “activo” (histórico)
-# schedule    → None = solo trigger manual (adecuado al TP / demos)
+# schedule    → @once = una corrida al activar el scheduler (post infra)
 # catchup     → False = no rellena corridas pasadas al activarlo
 # tags        → filtros en la UI
 with DAG(
     dag_id="etl_erp_to_bronce",
     start_date=datetime(2026, 1, 1),
-    schedule=None,
+    schedule="@once",
     catchup=False,
+    is_paused_upon_creation=False,
+    max_active_runs=1,
     tags=["tp", "bronce", "grupo1", "erp"],
 ) as dag:
-    # PythonOperator: ejecuta un callable Python en el worker
+    t_wait = PythonOperator(task_id="wait_for_infra", python_callable=task_wait_for_infra)
     t0 = PythonOperator(task_id="ensure_bronce_ddl", python_callable=task_ensure_ddl)
     t1 = PythonOperator(task_id="extract_erp", python_callable=task_extract)
     t2 = PythonOperator(task_id="transform_normalize", python_callable=task_transform)
     t3 = PythonOperator(task_id="load_bronce", python_callable=task_load)
+    t4 = TriggerDagRunOperator(
+        task_id="trigger_bronce_to_gold",
+        trigger_dag_id="etl_bronce_to_gold",
+        wait_for_completion=True,
+        poke_interval=15,
+    )
 
-    # Dependencias: t0 debe terminar OK antes de t1, etc.
-    t0 >> t1 >> t2 >> t3
+    t_wait >> t0 >> t1 >> t2 >> t3 >> t4

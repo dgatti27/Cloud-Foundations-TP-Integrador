@@ -10,8 +10,8 @@ modelo dimensional en `gold` (6 dims + fact_venta_linea).
 
 Prerrequisito
 -------------
-Debe haberse corrido con éxito `etl_erp_to_bronce` (grupo 1). Si bronce
-está vacío, este DAG termina “OK” con 0 filas o falla según datos.
+Debe haberse corrido con éxito `etl_erp_to_bronce` (grupo 1). Lo dispara
+automáticamente al final del grupo 1 (`TriggerDagRunOperator`) o manualmente.
 
 Orden de tasks
 --------------
@@ -119,8 +119,10 @@ def _deserialize_bundle(bundle: dict) -> dict:
 with DAG(
     dag_id="etl_bronce_to_gold",
     start_date=datetime(2026, 1, 1),
-    schedule=None,       # solo manual
+    schedule=None,
     catchup=False,
+    is_paused_upon_creation=False,
+    max_active_runs=1,
     tags=["tp", "gold", "grupo2", "erp"],
 ) as dag:
     t1 = PythonOperator(task_id="extract_bronce", python_callable=task_extract)

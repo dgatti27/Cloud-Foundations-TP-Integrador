@@ -104,7 +104,7 @@ Todo se corre desde la **raíz del repo**. Orden obligatorio:
   4  tofu apply                    ← IAM/VPC/RDS/secrets/Lambda/seed
  4b  sync-rds-port                 ← alinea puerto MiniStack en .env + Lambda
   5  smoke (opcional)
-  6  DAGs camino B                 ← pipeline ERP → bronce → gold
+  6  Pipeline ERP → bronce → gold   ← automático (@once) tras apply + sync
   7  Postman / curl                ← GET /gold/query
   9  cleanup-hobby (bajar todo)    ← destroy + wipe volúmenes emuladores
 ```
@@ -522,6 +522,26 @@ Esperado: **0 to add, 0 to destroy**. Puede haber `update in-place` cosméticos 
 
 Prerrequisitos: pasos **3** (Compose healthy) + **4** (`tofu apply` OK) + **4b** (`sync-rds-port`).
 
+### 6.0 Ejecución automática (default)
+
+`etl_erp_to_bronce` tiene **`schedule="@once"`**: cuando el scheduler de Airflow queda en línea, encola **una** corrida que:
+
+1. **`wait_for_infra`** — espera hasta 15 min a que existan secrets (`dw/rds-etl`, `dw/erp`) y conexión RDS/ERP (post `tofu apply`).
+2. **`ensure_bronce_ddl` → … → `load_bronce`** — ETL grupo 1.
+3. **`trigger_bronce_to_gold`** — dispara `etl_bronce_to_gold` y espera a que termine.
+
+Los DAGs arrancan **despausados** (`DAGS_ARE_PAUSED_AT_CREATION=false` en Compose).
+
+**Orden recomendado:** `compose up` → `tofu apply` → `sync-rds-port -RecreateAirflow` → re-apply si cambió puerto.  
+El pipeline arranca solo en cuanto la infra responde (no hace falta trigger manual).
+
+**Re-ejecución:** `@once` corre **una sola vez** por metastore Airflow (volumen `postgres-dw`). Si ya hubo una corrida exitosa y querés repetir el ETL:
+
+- UI: Trigger manual en `etl_erp_to_bronce`, o
+- CLI: `docker exec airflow-scheduler-integrador airflow dags trigger etl_erp_to_bronce`
+
+`etl_rds_comprobation` sigue siendo **solo manual** (camino A de conectividad).
+
 ### 6.1 Qué debe existir ya
 
 | Pieza | Quién la creó |
@@ -541,17 +561,12 @@ docker volume rm cloud-foundations-tp-integrador_postgres-data-erp
 docker compose up -d postgres-erp
 ```
 
-### 6.2 Opción A — UI Airflow (recomendado para entender el flujo)
+### 6.2 Opción A — UI Airflow (manual o seguimiento)
 
 1. Abrí http://localhost:8080 → login `admin` / `admin`.
-2. Activá (toggle) los DAGs:
-   - `etl_erp_to_bronce`
-   - `etl_bronce_to_gold`
-3. En **`etl_erp_to_bronce`** → Trigger DAG (play). Esperá estado **success**.
-   - Tasks: `ensure_bronce_ddl` → `extract_erp` → `transform_normalize` → `load_bronce`
-4. En **`etl_bronce_to_gold`** → Trigger. Esperá **success**.
-   - Tasks: `extract_bronce` → `transform_to_gold` → `load_gold`
-5. (Opcional) Camino A de conectividad: trigger `etl_rds_comprobation`.
+2. Tras apply + sync, el pipeline debería correr solo; seguí el progreso en la UI.
+3. Para **forzar** otra corrida: Trigger en **`etl_erp_to_bronce`** (dispara también gold al final).
+4. (Opcional) Camino A de conectividad: trigger manual `etl_rds_comprobation`.
 
 Logs: UI Airflow o `apps/airflow/logs/`.
 
@@ -846,7 +861,7 @@ No apliques IaC fuera de [`infra/`](infra/).
 | `InvalidAccessKeyId` en `s3 ls` | MinIO usa `minioadmin`/`minioadmin`, no `test`/`test` |
 | ALB `:8088` 502 | Lambda aún no aplicada (`tofu apply`) o LocalStack no healthy |
 | `gold/query` → `No module named 'pg8000'` | Zip debe incluir `apps/api/vendor/`. Rebuild vendor + `tofu apply` |
-| `gold/query` row_count 0 | Corré camino B (paso 6) antes de Postman |
+| `gold/query` row_count 0 | Pipeline aún corriendo o `@once` ya consumido → UI/logs paso 6; trigger manual si hace falta |
 | pgAdmin no conecta a RDS | Mismo puerto que paso **4b**; host `host.docker.internal` |
 | `tofu apply` falla en Windows/OneDrive | Usá toolbox: `docker compose --profile iac run --rm tp-iac apply` |
 | Plan con drifts eternos en SG refs | Ya mitigado en HCL (`ignore_changes`); re-aplicá una vez |
