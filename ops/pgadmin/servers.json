@@ -34,11 +34,11 @@
       "Name": "RDS MiniStack tp-dw-db (bronce+gold)",
       "Group": "TP Integrador",
       "Host": "host.docker.internal",
-      "Port": 15432,
+      "Port": 15434,
       "MaintenanceDB": "dw",
       "Username": "dwadmin",
       "SSLMode": "prefer",
-      "Comment": "Password = secret dw/rds-master (MiniStack). No está en pgpass."
+      "Comment": "Password = secret dw/rds-master (MiniStack). Puerto host: sync-rds-port.ps1 (ahora 15434). No está en pgpass."
     }
   }
 }

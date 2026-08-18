@@ -114,21 +114,39 @@ if (-not $SkipDestroy) {
 
 # --- 2) Compose down ---
 Write-Step "docker compose down"
-$downCode = Invoke-Docker compose down --remove-orphans
+# Pasar args como array: si no, PowerShell interpreta --remove-orphans como flag de
+# Invoke-Docker y Docker recibe `docker --remove-orphans` (exit 125, stack sigue up).
+$downCode = Invoke-Docker @("compose", "down", "--remove-orphans")
 if ($downCode -eq 0) {
     Write-Ok "compose down"
 } else {
     Write-Warn "compose down exit $downCode (puede ser normal si ya estaba bajo)"
 }
 
-# --- 3) Sidecars RDS MiniStack ---
-Write-Step "contenedores ministack-rds-*"
+# --- 3) Sidecars RDS MiniStack + leftovers que aún montan volúmenes ---
+Write-Step "contenedores ministack-rds-* / leftovers"
 $rdsIds = @(docker ps -aq --filter "name=ministack-rds" 2>$null | Where-Object { $_ })
 if ($rdsIds.Count -gt 0) {
-    $null = Invoke-Docker @("rm", "-f") + @($rdsIds)
-    Write-Ok ("eliminados: " + $rdsIds.Count)
+    $null = Invoke-Docker (@("rm", "-f") + $rdsIds)
+    Write-Ok ("ministack-rds eliminados: " + $rdsIds.Count)
 } else {
-    Write-Ok "ninguno"
+    Write-Ok "ningún ministack-rds"
+}
+
+# LocalStack/MiniStack a veces quedan vivos si el compose down falló.
+$leftoverNames = @(
+    "localstack-integrador",
+    "ministack-integrador",
+    "s3-soporte",
+    "tp-integrador-iac"
+)
+$leftoverIds = foreach ($n in $leftoverNames) {
+    docker ps -aq --filter "name=$n" 2>$null
+}
+$leftoverIds = @($leftoverIds | Where-Object { $_ } | Select-Object -Unique)
+if ($leftoverIds.Count -gt 0) {
+    $null = Invoke-Docker (@("rm", "-f") + $leftoverIds)
+    Write-Ok ("leftovers eliminados: " + $leftoverIds.Count)
 }
 
 # --- 4) Volumenes ---
@@ -152,16 +170,22 @@ docker volume ls -q 2>$null | Where-Object { $_ -like "*ministack-rds*" } | ForE
 }
 
 foreach ($v in $vols) {
-    docker volume inspect $v 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        docker volume rm $v 2>$null | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            Write-Ok "rm $v"
-        } else {
-            Write-Warn "no se pudo borrar $v (en uso?)"
-        }
-    } else {
+    docker volume inspect $v 1>$null 2>$null
+    if ($LASTEXITCODE -ne 0) {
         Write-Host "  - $v (no existe)"
+        continue
+    }
+    # Contenedores (running o stopped) que aún montan el volumen.
+    $using = @(docker ps -aq --filter "volume=$v" 2>$null | Where-Object { $_ })
+    if ($using.Count -gt 0) {
+        Write-Warn "volumen $v en uso; rm -f contenedores $($using -join ', ')"
+        $null = Invoke-Docker (@("rm", "-f") + $using)
+    }
+    $rmCode = Invoke-Docker @("volume", "rm", $v)
+    if ($rmCode -eq 0) {
+        Write-Ok "rm $v"
+    } else {
+        Write-Warn "no se pudo borrar $v (¿aún en uso?)"
     }
 }
 

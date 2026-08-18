@@ -31,6 +31,9 @@ x-airflow-env: &airflow_env
   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres-dw:5432/gold
   AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
   PYTHONPATH: /opt/airflow/packages
+  # LocalExecutor corre tasks EN el scheduler. Sin esto, wait_for_infra falla
+  # (boto3/psycopg2 solo se instalaban en airflow-init, que es otro container).
+  _PIP_ADDITIONAL_REQUIREMENTS: psycopg2-binary boto3
 
 #Variables de entorno del bloque x-airflow-env (webserver, scheduler e init).
 #Sirven para que los DAGs / pipeline hablen con MiniStack y la RDS desde dentro de Docker.

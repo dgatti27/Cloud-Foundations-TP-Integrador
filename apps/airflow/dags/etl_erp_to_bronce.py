@@ -42,21 +42,63 @@ from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 # (evita fallar el parseo del DAG si el worker aún no tiene deps listas)
 # ---------------------------------------------------------------------------
 def task_wait_for_infra(**_):
-    """Espera a que existan secrets + RDS tras `tofu apply` (poll cada 15 s)."""
+    """Espera a que existan secrets + RDS tras `tofu apply` (poll cada 15 s).
+
+    MiniStack publica RDS en 15432/15433/…; si `.env` quedó desfasado,
+    prueba esos puertos y deja `RDS_PORT_OVERRIDE` para las tasks siguientes
+    (LocalExecutor = mismo proceso del scheduler).
+    """
+    import os
     import time
 
-    from pipeline.config import from_secrets, rds_etl_conn, source_conn
-    from pipeline.db import connect
+    try:
+        import boto3  # noqa: F401
+        import psycopg2  # noqa: F401
+        from pipeline.config import from_secrets, rds_etl_conn, source_conn
+        from pipeline.db import connect
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            f"Falta dependencia en el scheduler ({exc}). "
+            "Recreá Airflow: docker compose up -d --force-recreate "
+            "airflow-scheduler airflow-webserver "
+            "(compose instala boto3 + psycopg2 vía _PIP_ADDITIONAL_REQUIREMENTS)."
+        ) from exc
+
+    primary = int(os.environ.get("RDS_PORT_OVERRIDE", "15432"))
+    rds_ports: list[int] = []
+    for port in (primary, 15432, 15433, 15434, 15435):
+        if port not in rds_ports:
+            rds_ports.append(port)
 
     deadline = time.time() + 900
     last_err: Exception | None = None
     while time.time() < deadline:
         try:
-            from_secrets("dw/rds-etl")
-            from_secrets("dw/erp")
-            with connect(rds_etl_conn()) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT 1")
+            etl = from_secrets("dw/rds-etl")
+            erp = from_secrets("dw/erp")
+            print(
+                f"Secrets OK  etl_host={etl.get('host')} erp_host={erp.get('host')} "
+                f"override={os.environ.get('RDS_HOST_OVERRIDE')} "
+                f"ports={rds_ports}"
+            )
+
+            rds_ok = False
+            rds_err: Exception | None = None
+            for port in rds_ports:
+                os.environ["RDS_PORT_OVERRIDE"] = str(port)
+                try:
+                    with connect(rds_etl_conn()) as conn:
+                        with conn.cursor() as cur:
+                            cur.execute("SELECT 1")
+                    print(f"RDS OK en puerto {port}")
+                    rds_ok = True
+                    break
+                except Exception as exc:
+                    rds_err = exc
+                    print(f"RDS puerto {port}: {exc}")
+            if not rds_ok:
+                raise rds_err or RuntimeError("RDS no respondió en ningún puerto")
+
             with connect(source_conn("erp")) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT 1")

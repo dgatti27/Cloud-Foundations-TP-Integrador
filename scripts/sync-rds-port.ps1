@@ -94,6 +94,16 @@ if ($tfvarsChanged) {
     Write-Host "  terraform.tfvars ya tenía rds_port_override = $port" -ForegroundColor DarkGray
 }
 
+$pgPath = Join-Path $Root "ops/pgadmin/servers.json"
+if (Test-Path $pgPath) {
+    $pg = Get-Content $pgPath -Raw
+    $pgNew = [regex]::Replace($pg, '(?s)("Name": "RDS MiniStack tp-dw-db \(bronce\+gold\)".*?"Port": )\d+', "`${1}$port")
+    if ($pgNew -ne $pg) {
+        Set-Content -Path $pgPath -Value $pgNew -NoNewline
+        Write-Host "  OK ops/pgadmin/servers.json → Port=$port (recreá pgadmin si ya estaba importado)" -ForegroundColor Green
+    }
+}
+
 if ($envChanged -or $tfvarsChanged) {
     Write-Host ""
     Write-Host "Siguiente (si Airflow/Lambda ya estaban levantados):" -ForegroundColor Yellow
