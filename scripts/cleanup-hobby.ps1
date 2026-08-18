@@ -37,10 +37,19 @@ function Write-Ok([string]$msg) { Write-Host "  OK $msg" -ForegroundColor Green 
 function Write-Warn([string]$msg) { Write-Host "  ! $msg" -ForegroundColor Yellow }
 
 # Docker escribe progreso en stderr; en PS 5.1 eso dispara RemoteException con Stop.
-function Invoke-Docker([string[]]$Args) {
+# NUNCA nombrar el parámetro $Args: en Windows PowerShell 5.1 es variable automática
+# y queda vacía → se ejecuta `docker` sin args (help + exit 0) y compose down no corre.
+function Invoke-Docker {
+    param([Parameter(Mandatory)][string[]]$DockerArgs)
     $prev = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    & docker @Args 2>&1 | ForEach-Object { Write-Host $_ }
+    & docker @DockerArgs 2>&1 | ForEach-Object {
+        if ($_ -is [System.Management.Automation.ErrorRecord]) {
+            Write-Host $_.Exception.Message
+        } else {
+            Write-Host $_
+        }
+    }
     $code = $LASTEXITCODE
     $ErrorActionPreference = $prev
     return $code
@@ -114,9 +123,8 @@ if (-not $SkipDestroy) {
 
 # --- 2) Compose down ---
 Write-Step "docker compose down"
-# Pasar args como array: si no, PowerShell interpreta --remove-orphans como flag de
-# Invoke-Docker y Docker recibe `docker --remove-orphans` (exit 125, stack sigue up).
-$downCode = Invoke-Docker @("compose", "down", "--remove-orphans")
+# -DockerArgs evita que --remove-orphans se parseé como switch de la función.
+$downCode = Invoke-Docker -DockerArgs @("compose", "down", "--remove-orphans")
 if ($downCode -eq 0) {
     Write-Ok "compose down"
 } else {
@@ -127,7 +135,7 @@ if ($downCode -eq 0) {
 Write-Step "contenedores ministack-rds-* / leftovers"
 $rdsIds = @(docker ps -aq --filter "name=ministack-rds" 2>$null | Where-Object { $_ })
 if ($rdsIds.Count -gt 0) {
-    $null = Invoke-Docker (@("rm", "-f") + $rdsIds)
+    $null = Invoke-Docker -DockerArgs (@("rm", "-f") + $rdsIds)
     Write-Ok ("ministack-rds eliminados: " + $rdsIds.Count)
 } else {
     Write-Ok "ningún ministack-rds"
@@ -145,7 +153,7 @@ $leftoverIds = foreach ($n in $leftoverNames) {
 }
 $leftoverIds = @($leftoverIds | Where-Object { $_ } | Select-Object -Unique)
 if ($leftoverIds.Count -gt 0) {
-    $null = Invoke-Docker (@("rm", "-f") + $leftoverIds)
+    $null = Invoke-Docker -DockerArgs (@("rm", "-f") + $leftoverIds)
     Write-Ok ("leftovers eliminados: " + $leftoverIds.Count)
 }
 
@@ -179,9 +187,9 @@ foreach ($v in $vols) {
     $using = @(docker ps -aq --filter "volume=$v" 2>$null | Where-Object { $_ })
     if ($using.Count -gt 0) {
         Write-Warn "volumen $v en uso; rm -f contenedores $($using -join ', ')"
-        $null = Invoke-Docker (@("rm", "-f") + $using)
+        $null = Invoke-Docker -DockerArgs (@("rm", "-f") + $using)
     }
-    $rmCode = Invoke-Docker @("volume", "rm", $v)
+    $rmCode = Invoke-Docker -DockerArgs @("volume", "rm", $v)
     if ($rmCode -eq 0) {
         Write-Ok "rm $v"
     } else {
