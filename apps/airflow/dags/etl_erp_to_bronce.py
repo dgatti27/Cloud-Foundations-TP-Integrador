@@ -20,9 +20,12 @@ Orden de tasks (obligatorio)
 
 Cómo dispararlo
 ---------------
-  schedule="@once" → una corrida automática cuando el scheduler arranca
-  (espera RDS/secrets en `wait_for_infra`). Al terminar OK dispara
-  `etl_bronce_to_gold`. También podés trigger manual desde la UI.
+  schedule=None → no usa timetable de Airflow (`@once` se consume en el
+  metastore y NO vuelve a correr al levantar Compose).
+  Cada `docker compose up` dispara este DAG vía el one-shot
+  `airflow-bootstrap`. `wait_for_infra` espera RDS/secrets (tofu apply).
+  Al terminar OK dispara `etl_bronce_to_gold`. También: UI o
+  `airflow dags trigger etl_erp_to_bronce`.
 
 default_args
 ------------
@@ -191,13 +194,13 @@ def _deserialize(tables: dict) -> dict:
 # Definición del DAG
 # ---------------------------------------------------------------------------
 # start_date  → desde cuándo Airflow considera el DAG “activo” (histórico)
-# schedule    → @once = una corrida al activar el scheduler (post infra)
+# schedule    → None = solo trigger (bootstrap Compose / UI / CLI)
 # catchup     → False = no rellena corridas pasadas al activarlo
 # tags        → filtros en la UI
 with DAG(
     dag_id="etl_erp_to_bronce",
     start_date=datetime(2026, 1, 1),
-    schedule="@once",
+    schedule=None,
     catchup=False,
     is_paused_upon_creation=False,
     max_active_runs=1,

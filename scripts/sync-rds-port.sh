@@ -67,13 +67,13 @@ fi
 if [[ "$env_changed" == true || "$tfvars_changed" == true ]]; then
   echo ""
   echo "Siguiente (si Airflow/Lambda ya estaban levantados):"
-  echo "  docker compose up -d --force-recreate airflow-scheduler airflow-webserver"
+  echo "  docker compose up -d --force-recreate airflow-scheduler airflow-webserver airflow-bootstrap"
   echo "  docker compose --profile iac run --rm tp-iac apply"
 fi
 
 if [[ "$RECREATE_AIRFLOW" == true ]]; then
   echo ""
   echo "Recreando Airflow..."
-  docker compose up -d --force-recreate airflow-scheduler airflow-webserver
-  echo "  OK Airflow recreado"
+  docker compose up -d --force-recreate airflow-scheduler airflow-webserver airflow-bootstrap
+  echo "  OK Airflow recreado (bootstrap re-dispara etl_erp_to_bronce)"
 fi

@@ -30,7 +30,7 @@ Detalle del flujo ERP → gold: [`apps/pipeline/README.md`](../pipeline/README.m
 etl_erp_to_bronce  →  etl_bronce_to_gold
 ```
 
-Ambos tienen `schedule=None`: solo trigger manual (UI o CLI).
+`etl_erp_to_bronce` tiene `schedule=None`: lo dispara el one-shot Compose `airflow-bootstrap` en cada `up` (también UI/CLI). `etl_bronce_to_gold` queda en `schedule=None` y lo encadena el DAG grupo 1.
 
 ### Camino A vs B
 

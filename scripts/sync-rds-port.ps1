@@ -107,13 +107,13 @@ if (Test-Path $pgPath) {
 if ($envChanged -or $tfvarsChanged) {
     Write-Host ""
     Write-Host "Siguiente (si Airflow/Lambda ya estaban levantados):" -ForegroundColor Yellow
-    Write-Host "  docker compose up -d --force-recreate airflow-scheduler airflow-webserver"
+    Write-Host "  docker compose up -d --force-recreate airflow-scheduler airflow-webserver airflow-bootstrap"
     Write-Host "  docker compose --profile iac run --rm tp-iac apply"
 }
 
 if ($RecreateAirflow) {
     Write-Host ""
     Write-Host "Recreando Airflow..." -ForegroundColor Cyan
-    docker compose up -d --force-recreate airflow-scheduler airflow-webserver
-    Write-Host "  OK Airflow recreado" -ForegroundColor Green
+    docker compose up -d --force-recreate airflow-scheduler airflow-webserver airflow-bootstrap
+    Write-Host "  OK Airflow recreado (bootstrap re-dispara etl_erp_to_bronce)" -ForegroundColor Green
 }

@@ -104,7 +104,7 @@ Todo se corre desde la **raíz del repo**. Orden obligatorio:
   4  tofu apply                    ← IAM/VPC/RDS/secrets/Lambda/seed
  4b  sync-rds-port                 ← alinea puerto MiniStack en .env + Lambda
   5  smoke (opcional)
-  6  Pipeline ERP → bronce → gold   ← automático (@once) tras apply + sync
+  6  Pipeline ERP → bronce → gold   ← automático (airflow-bootstrap); si no corre, trigger CLI
   7  Postman / curl                ← GET /gold/query
   9  cleanup-hobby (bajar todo)    ← destroy + wipe volúmenes emuladores
 ```
@@ -118,7 +118,9 @@ docker compose up -d
 docker compose --profile iac run --rm tp-iac apply
 .\scripts\sync-rds-port.ps1 -RecreateAirflow
 docker compose --profile iac run --rm tp-iac apply   # solo si sync cambió el puerto
-# luego paso 6 (DAGs) y paso 7 (API)
+# paso 6: el bootstrap dispara etl_erp_to_bronce. Si la UI no muestra corrida nueva:
+docker exec airflow-scheduler-integrador airflow dags trigger etl_erp_to_bronce
+# luego paso 7 (API)
 ```
 
 ```bash
@@ -128,6 +130,8 @@ docker compose up -d
 docker compose --profile iac run --rm tp-iac apply
 ./scripts/sync-rds-port.sh --recreate-airflow
 docker compose --profile iac run --rm tp-iac apply   # solo si sync cambió el puerto
+# paso 6: el bootstrap dispara etl_erp_to_bronce. Si la UI no muestra corrida nueva:
+docker exec airflow-scheduler-integrador airflow dags trigger etl_erp_to_bronce
 ```
 
 `labs/ecs/ecs.py` es un **atajo** del paso 6 (levanta/triggerea Airflow).  
@@ -524,7 +528,9 @@ Prerrequisitos: pasos **3** (Compose healthy) + **4** (`tofu apply` OK) + **4b**
 
 ### 6.0 Ejecución automática (default)
 
-`etl_erp_to_bronce` tiene **`schedule="@once"`**: cuando el scheduler de Airflow queda en línea, encola **una** corrida que:
+`etl_erp_to_bronce` tiene **`schedule=None`**. No usa `@once`: Airflow guarda esa corrida en el metastore (`postgres-dw`) y **no la vuelve a encolar** al reiniciar. En su lugar, el one-shot **`airflow-bootstrap`** hace `airflow dags trigger` en cada `compose up` (y cuando `sync-rds-port -RecreateAirflow` recrea Airflow).
+
+La corrida:
 
 1. **`wait_for_infra`** — espera hasta 15 min a que existan secrets (`dw/rds-etl`, `dw/erp`) y conexión RDS/ERP (post `tofu apply`).
 2. **`ensure_bronce_ddl` → … → `load_bronce`** — ETL grupo 1.
@@ -533,12 +539,15 @@ Prerrequisitos: pasos **3** (Compose healthy) + **4** (`tofu apply` OK) + **4b**
 Los DAGs arrancan **despausados** (`DAGS_ARE_PAUSED_AT_CREATION=false` en Compose).
 
 **Orden recomendado:** `compose up` → `tofu apply` → `sync-rds-port -RecreateAirflow` → re-apply si cambió puerto.  
-El pipeline arranca solo en cuanto la infra responde (no hace falta trigger manual).
+El pipeline arranca solo en cuanto la infra responde.
 
-**Re-ejecución:** `@once` corre **una sola vez** por metastore Airflow (volumen `postgres-dw`). Si ya hubo una corrida exitosa y querés repetir el ETL:
+**Si los DAGs no se ejecutan** (bootstrap ya salió, UI sin corrida nueva, o Gold vacío):
 
-- UI: Trigger manual en `etl_erp_to_bronce`, o
-- CLI: `docker exec airflow-scheduler-integrador airflow dags trigger etl_erp_to_bronce`
+```powershell
+docker exec airflow-scheduler-integrador airflow dags trigger etl_erp_to_bronce
+```
+
+Eso encola grupo 1; al terminar OK dispara `etl_bronce_to_gold`. Alternativas: Trigger en la UI (`http://localhost:8080`) o `docker compose up -d --force-recreate airflow-bootstrap`.
 
 `etl_rds_comprobation` sigue siendo **solo manual** (camino A de conectividad).
 
@@ -861,7 +870,7 @@ No apliques IaC fuera de [`infra/`](infra/).
 | `InvalidAccessKeyId` en `s3 ls` | MinIO usa `minioadmin`/`minioadmin`, no `test`/`test` |
 | ALB `:8088` 502 | Lambda aún no aplicada (`tofu apply`) o LocalStack no healthy |
 | `gold/query` → `No module named 'pg8000'` | Zip debe incluir `apps/api/vendor/`. Rebuild vendor + `tofu apply` |
-| `gold/query` row_count 0 | Pipeline aún corriendo o `@once` ya consumido → UI/logs paso 6; trigger manual si hace falta |
+| `gold/query` row_count 0 | Pipeline aún corriendo o bootstrap no corrió → UI/logs paso 6; `docker compose up -d --force-recreate airflow-bootstrap` |
 | pgAdmin no conecta a RDS | Mismo puerto que paso **4b**; host `host.docker.internal` |
 | `tofu apply` falla en Windows/OneDrive | Usá toolbox: `docker compose --profile iac run --rm tp-iac apply` |
 | Plan con drifts eternos en SG refs | Ya mitigado en HCL (`ignore_changes`); re-aplicá una vez |
