@@ -197,6 +197,13 @@ def _deserialize(tables: dict) -> dict:
 # schedule    → None = solo trigger (bootstrap Compose / UI / CLI)
 # catchup     → False = no rellena corridas pasadas al activarlo
 # tags        → filtros en la UI
+# max_active_runs → solo 1 corrida a la vez para evitar conflictos.
+# is_paused_upon_creation → no se inicia automáticamente al crear el DAG.
+# grupo1 → grupo de DAGs.
+# erp → origen de datos.
+# tp → proyecto.
+# bronce → schema de destino.
+# grupo1 → grupo de DAGs.
 with DAG(
     dag_id="etl_erp_to_bronce",
     start_date=datetime(2026, 1, 1),
@@ -217,5 +224,5 @@ with DAG(
         wait_for_completion=True,
         poke_interval=15,
     )
-
+    
     t_wait >> t0 >> t1 >> t2 >> t3 >> t4
